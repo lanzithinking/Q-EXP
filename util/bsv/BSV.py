@@ -29,6 +29,7 @@ import sys
 sys.path.append( "../../" )
 # from util.kernel.covf import *
 from util.kernel.serexp import *
+# from util.kernel.graphL import *
 
 # set to warn only once for the same warnings
 import warnings
@@ -51,7 +52,6 @@ class BSV(Ker):
         spdapx: use speed-up or approximation
         """
         self.x=x # inputs
-        if self.x.ndim==1: self.x=self.x[:,None]
         super().__init__(x=self.x, L=L, store_eig=store_eig, **kwargs)
         if not hasattr(self,'q'): self.q=kwargs.pop('q',1.0)
     
@@ -138,7 +138,8 @@ if __name__=='__main__':
         print('time: %.5f'% (t2-t1))
 
     v=bsv.rnd(n=2)
-    invCv=np.linalg.solve(C,v)
+    solver=spsla.spsolve if sps.issparse(C) else spla.solve
+    invCv=solver(C,v)
 #     C_op=spsla.LinearOperator((bsv.N,)*2,matvec=lambda v:bsv.mult(v))
 #     invCv=spsla.cgs(C_op,v)[0][:,np.newaxis]
     invCv_te=bsv.act(v,-1)

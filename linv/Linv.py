@@ -8,7 +8,7 @@ Created February 15, 2022 for project of q-exponential process prior (Q-EXP)
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The Q-EXP project"
 __license__ = "GPL"
-__version__ = "0.4"
+__version__ = "0.5"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@outlook.com"
 
@@ -17,7 +17,9 @@ from scipy import optimize
 import os
 
 # self defined modules
-from prior_bsv import *
+# from prior_bsv import *
+# from prior_qep import *
+from prior import *
 from misfit import *
 
 # set to warn only once for the same warnings
@@ -46,7 +48,7 @@ class Linv:
         self.misfit = misfit(**kwargs)
         print('\nLikelihood model is obtained.')
         # set prior
-        self.prior = prior(meshsz=self.misfit.size,L=self.KL_truc,**kwargs)
+        self.prior = prior(input=self.misfit.obs,L=self.KL_truc,**kwargs)
         print('\nPrior model is specified.')
         # set low-rank approximate Gaussian posterior
         # self.post_Ga = Gaussian_apx_posterior(self.prior,eigs='hold')
@@ -57,7 +59,7 @@ class Linv:
         Compute the misfit (default), or the negative log-posterior for given parameter.
         """
         # evaluate data-misfit function
-        msft = self.misfit.cost(self.prior.vec2fun(parameter))
+        msft = self.misfit.cost(self.prior.vec2fun(parameter) if self.prior.space=='vec' else parameter)
         if not MF_only: msft += self.prior.cost(parameter)
         return msft
     
@@ -66,7 +68,8 @@ class Linv:
         Compute the gradient of misfit (default), or the gradient of negative log-posterior for given parameter.
         """
         # obtain the gradient
-        grad = self.prior.fun2vec(self.misfit.grad(self.prior.vec2fun(parameter)))
+        grad = self.misfit.grad(self.prior.vec2fun(parameter) if self.prior.space=='vec' else parameter)
+        if self.prior.space=='vec': grad = self.prior.fun2vec(grad)
         if not MF_only: grad += self.prior.grad(parameter)
         return grad
 
@@ -122,7 +125,8 @@ class Linv:
         print( sep, "Find the MAP point", sep)
         # set up initial point
         # param0 = self.prior.sample()
-        param0 = self.prior.fun2vec(self.misfit.obs.flatten())
+        param0 = self.misfit.obs.flatten()
+        if self.prior.space=='vec': param0=self.prior.fun2vec(param0)
         fun = lambda parameter: self._get_misfit(parameter, MF_only=False)
         grad = lambda parameter: self._get_grad(parameter, MF_only=False)
         global Nfeval
@@ -135,6 +139,7 @@ class Linv:
         # solve for MAP
         start = time.time()
         res = optimize.minimize(fun, param0, method='BFGS', jac=grad, callback=call_back, options={'maxiter':1000,'disp':True})
+        # res = optimize.minimize(fun, param0, method='L-BFGS-B', jac=grad, callback=call_back, options={'maxiter':1000,'disp':True})
         # res = optimize.minimize(fun, param0, method='Newton-CG', jac=grad, callback=call_back, options={'maxiter':500,'disp':True})
         end = time.time()
         print('\nTime used is %.4f' % (end-start))
@@ -208,15 +213,17 @@ if __name__ == '__main__':
     seed=2022
     np.random.seed(seed)
     # define Bayesian inverse problem
+    prior_option = 'qep'
     fltnz = 2
     basis_opt = 'Fourier'
     KL_truc = 2000
-    sigma = 1
+    sigma2 = 1
     s = 1
+    q = 1
     store_eig = True
-    linv = Linv(fltnz=fltnz, basis_opt=basis_opt, KL_truc=KL_truc, sigma=sigma, s=s, store_eig=store_eig, seed=seed)
+    linv = Linv(prior_option=prior_option, fltnz=fltnz, basis_opt=basis_opt, KL_truc=KL_truc, sigma2=sigma2, s=s, q=q, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
     # test
-    linv.test(1e-8)
+    # linv.test(1e-8)
     # obtain MAP
     map_v = linv.get_MAP(SAVE=True)
     print('MAP estimate: '+(min(len(map_v),10)*"%.4f ") % tuple(map_v[:min(len(map_v),10)]) )

@@ -13,7 +13,7 @@ __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2019, TESD project"
 __credits__ = ""
 __license__ = "GPL"
-__version__ = "0.3"
+__version__ = "0.4"
 __maintainer__ = "Shiwei Lan"
 __email__ = "shiwei@illinois.edu; lanzithinking@gmail.com; slan@asu.edu"
 
@@ -55,24 +55,16 @@ def mdivf(a,b,transp=False):
     matrix division (multiply by inverse) function a*b^(-1) with a being a (square) matrix, b being a vector, matrix or 3d array
     'transp' indicates whether b is transposed already; returning result is in the same layout as b
     """
+    solver=spsla.spsolve if sps.issparse(a) else lambda a,b: spla.solve(a,b,assume_a='pos' if np.allclose(a,a.T) else 'gen')
     if transp:
         if np.ndim(b)<=2: # optional
-            try:
-                c=spla.solve(a,b.T,assume_a='pos').T
-            except spla.LinAlgError:
-                c=spla.solve(a,b.T).T
+            c=solver(a,b.T).T
         elif np.ndim(b)==3:
-            try:
-                c=spla.solve(a,b.swapaxes(0,1),assume_a='pos').swapaxes(0,1)
-            except spla.LinAlgError:
-                c=spla.solve(a,b.swapaxes(0,1)).swapaxes(0,1)
+            c=solver(a,b.swapaxes(0,1)).swapaxes(0,1)
         else:
             raise Exception('Wrong dimension of b!')
     else:
-        try:
-            c=spla.solve(a,b,assume_a='pos')
-        except spla.LinAlgError:
-            c=spla.solve(a,b)
+        c=solver(a,b)
     return c
     
 def itsol(a,b,solver='cg',transp=False,comm=None,**kwargs):

@@ -26,7 +26,7 @@ def S3(u0,l0,prior,loglik):
       l: new log-likelihood
     '''
     # choose a circle
-    S = np.random.randn(u0.shape)
+    S = np.random.randn(*u0.shape)
     S /= np.linalg.norm(S,axis=0)
     
     # log-likelihood threshold (defines a slice)
@@ -38,14 +38,14 @@ def S3(u0,l0,prior,loglik):
     
     # repeat slice procedure until a proposal is accepted (land on the slice)
     S0 = prior.normalize(u0)
-    R = np.random.chisquare(df=S.shape[0])
+    # R = np.random.chisquare(df=S.shape[0])**(1/prior.q)
     while 1:
         S_t = S0 * np.cos(t) + S * np.sin(t)
-        u = R*prior.act(S_t/np.linalg.norm(S_t,axis=0),0.5)
-        # u = prior.sample(S=S_t/np.linalg.norm(S_t,axis=0))
+        # u = R*prior.C_act(S_t/np.linalg.norm(S_t,axis=0),0.5)
+        u = prior.sample(S=S_t/np.linalg.norm(S_t,axis=0))
         l = loglik(u)
         if l > logy:
-            return q, l
+            return u, l
         else:
             # shrink the bracket and try a new point
             if t < 0:
