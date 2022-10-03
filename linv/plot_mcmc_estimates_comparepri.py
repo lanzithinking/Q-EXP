@@ -18,19 +18,19 @@ seed=2022
 fltnz = 2
 ker_opt = 'serexp'
 basis_opt = 'Fourier'
-KL_truc = 2000
+KL_trunc = 2000
 space = 'fun' if ker_opt=='graphL' else 'vec'
 sigma2 = 1
 s = 1
 store_eig = (ker_opt!='graphL')
-linv = Linv(fltnz=fltnz, ker_opt=ker_opt, basis_opt=basis_opt, KL_truc=KL_truc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
+linv = Linv(fltnz=fltnz, ker_opt=ker_opt, basis_opt=basis_opt, KL_trunc=KL_trunc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
 
 # models
 pri_mdls=('GP','BSV','qEP')
 mdl_names=['Gaussian','Besov','q-Exponential']
 num_mdls=len(pri_mdls)
 # obtain estimates
-folder = './analysis'
+folder = './result'
 if os.path.exists(os.path.join(folder,'mcmc_summary.pckl')):
     f=open(os.path.join(folder,'mcmc_summary.pckl'),'rb')
     med_v,mean_v,std_v=pickle.load(f)
@@ -50,7 +50,7 @@ else:
                 try:
                     f=open(os.path.join(fld_m,f_i),'rb')
                     f_read=pickle.load(f)
-                    samp=f_read[-4]
+                    samp=f_read[-4] if m!=1 else f_read[3]
                     if linv.prior.space=='vec': samp=linv.prior.vec2fun(samp.T).T
                     med_v[m]=np.median(samp,axis=0)
                     mean_v[m]=np.mean(samp,axis=0)

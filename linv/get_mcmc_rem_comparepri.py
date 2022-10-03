@@ -17,12 +17,12 @@ seed=2022
 fltnz = 2
 ker_opt = 'serexp'
 basis_opt = 'Fourier'
-KL_truc = 2000
+KL_trunc = 2000
 space = 'fun' if ker_opt=='graphL' else 'vec'
 sigma2 = 1
 s = 1
 store_eig = (ker_opt!='graphL')
-linv = Linv(fltnz=fltnz, ker_opt=ker_opt, basis_opt=basis_opt, KL_truc=KL_truc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
+linv = Linv(fltnz=fltnz, ker_opt=ker_opt, basis_opt=basis_opt, KL_trunc=KL_trunc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
 true_param = linv.misfit.truth.flatten()
 
 # models
@@ -33,7 +33,7 @@ num_mdls=len(pri_mdls)
 rem_m=np.zeros(num_mdls)
 rem_s=np.zeros(num_mdls)
 # obtain estimates
-folder = './analysis'
+folder = './result'
 for m in range(num_mdls):
     print('Processing '+pri_mdls[m]+' prior model...\n')
     fld_m = folder+'/'+pri_mdls[m]
@@ -46,7 +46,7 @@ for m in range(num_mdls):
             try:
                 f=open(os.path.join(fld_m,f_i),'rb')
                 f_read=pickle.load(f)
-                samp=f_read[-4]
+                samp=f_read[-4] if m!=1 else f_read[3]
                 if linv.prior.space=='vec': samp=linv.prior.vec2fun(samp.T).T
                 samp_mean=np.mean(samp,axis=0)
                 # compute error
