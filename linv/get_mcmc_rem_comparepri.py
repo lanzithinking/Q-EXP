@@ -15,12 +15,14 @@ from Linv import Linv
 seed=2022
 # define the inverse problem
 fltnz = 2
+ker_opt = 'serexp'
 basis_opt = 'Fourier'
 KL_truc = 2000
-sigma = 1
+space = 'fun' if ker_opt=='graphL' else 'vec'
+sigma2 = 1
 s = 1
-store_eig = True
-linv = Linv(fltnz=fltnz, basis_opt=basis_opt, KL_truc=KL_truc, sigma=sigma, s=s, store_eig=store_eig, seed=seed)
+store_eig = (ker_opt!='graphL')
+linv = Linv(fltnz=fltnz, ker_opt=ker_opt, basis_opt=basis_opt, KL_truc=KL_truc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
 true_param = linv.misfit.truth.flatten()
 
 # models
@@ -45,7 +47,8 @@ for m in range(num_mdls):
                 f=open(os.path.join(fld_m,f_i),'rb')
                 f_read=pickle.load(f)
                 samp=f_read[-4]
-                samp_mean=linv.prior.vec2fun(np.mean(samp,axis=0))
+                if linv.prior.space=='vec': samp=linv.prior.vec2fun(samp.T).T
+                samp_mean=np.mean(samp,axis=0)
                 # compute error
                 errs.append(np.linalg.norm(samp_mean-true_param)/np.linalg.norm(true_param))
                 num_read+=1

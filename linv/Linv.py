@@ -8,7 +8,7 @@ Created February 15, 2022 for project of q-exponential process prior (Q-EXP)
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The Q-EXP project"
 __license__ = "GPL"
-__version__ = "0.5"
+__version__ = "0.6"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@outlook.com"
 
@@ -31,7 +31,7 @@ class Linv:
         """
         Initialize the linear inverse problem by defining the prior model and the misfit (likelihood) model.
         """
-        self.KL_truc=kwargs.pop('KL_truc', 100)
+        self.KL_trunc=kwargs.pop('KL_trunc', 100)
         
         # define the inverse problem with prior, and misfit
         seed = kwargs.pop('seed',2022)
@@ -48,19 +48,19 @@ class Linv:
         self.misfit = misfit(**kwargs)
         print('\nLikelihood model is obtained.')
         # set prior
-        self.prior = prior(input=self.misfit.obs,L=self.KL_truc,**kwargs)
+        self.prior = prior(input=self.misfit.obs if kwargs.get('ker_opt','serexp')=='graphL' else self.misfit.size,L=self.KL_trunc,**kwargs)
         print('\nPrior model is specified.')
         # set low-rank approximate Gaussian posterior
         # self.post_Ga = Gaussian_apx_posterior(self.prior,eigs='hold')
         # print('\nApproximate posterior model is set.\n')
     
-    def _get_misfit(self, parameter, MF_only=True):
+    def _get_misfit(self, parameter, MF_only=True, **kwargs):
         """
         Compute the misfit (default), or the negative log-posterior for given parameter.
         """
         # evaluate data-misfit function
         msft = self.misfit.cost(self.prior.vec2fun(parameter) if self.prior.space=='vec' else parameter)
-        if not MF_only: msft += self.prior.cost(parameter)
+        if not MF_only: msft += self.prior.cost(parameter, **kwargs)
         return msft
     
     def _get_grad(self, parameter, MF_only=True):
@@ -138,8 +138,8 @@ class Linv:
         print('{0:4s}   {1:9s}   {2:9s}   {3:9s}   {4:9s}'.format('Iter', ' X1', ' X2', ' X3', 'f(X)'))
         # solve for MAP
         start = time.time()
-        res = optimize.minimize(fun, param0, method='BFGS', jac=grad, callback=call_back, options={'maxiter':1000,'disp':True})
-        # res = optimize.minimize(fun, param0, method='L-BFGS-B', jac=grad, callback=call_back, options={'maxiter':1000,'disp':True})
+        # res = optimize.minimize(fun, param0, method='BFGS', jac=grad, callback=call_back, options={'maxiter':1000,'disp':True})
+        res = optimize.minimize(fun, param0, method='L-BFGS-B', jac=grad, callback=call_back, options={'maxiter':1000,'disp':True})
         # res = optimize.minimize(fun, param0, method='Newton-CG', jac=grad, callback=call_back, options={'maxiter':500,'disp':True})
         end = time.time()
         print('\nTime used is %.4f' % (end-start))
@@ -213,23 +213,36 @@ if __name__ == '__main__':
     seed=2022
     np.random.seed(seed)
     # define Bayesian inverse problem
-    prior_option = 'qep'
-    fltnz = 2
-    basis_opt = 'Fourier'
-    KL_truc = 2000
-    sigma2 = 1
-    s = 1
-    q = 1
-    store_eig = True
-    linv = Linv(prior_option=prior_option, fltnz=fltnz, basis_opt=basis_opt, KL_truc=KL_truc, sigma2=sigma2, s=s, q=q, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
+    prior_params={'prior_option':'qep',
+                  'ker_opt':'serexp',
+                  'basis_opt':'Fourier', # serexp param
+                  'KL_trunc':2000,
+                  'space':'vec',
+                  'sigma2':1,
+                  's':1,
+                  'q':1,
+                  'store_eig':True,
+                  'normalize':True, # graphL param
+                  'weightedge':True} # graphL param
+    lik_params={'fltnz':2}
+    # prior_option = 'gp'
+    # fltnz = 2
+    # basis_opt = 'Fourier'
+    # KL_trunc = 2000
+    # sigma2 = 1
+    # s = 1
+    # q = 1
+    # store_eig = False
+    linv = Linv(**prior_params,**lik_params, seed=seed)
     # test
-    # linv.test(1e-8)
+    linv.test(1e-8)
     # obtain MAP
-    map_v = linv.get_MAP(SAVE=True)
-    print('MAP estimate: '+(min(len(map_v),10)*"%.4f ") % tuple(map_v[:min(len(map_v),10)]) )
+    map = linv.get_MAP(SAVE=True)
+    print('MAP estimate: '+(min(len(map),10)*"%.4f ") % tuple(map[:min(len(map_v),10)]) )
     #  compare it with the truth
     true_param = linv.misfit.truth
-    map_f = linv.prior.vec2fun(map_v).reshape(true_param.shape)
+    map_f = linv.prior.vec2fun(map) if linv.prior.space=='vec' else map
+    map_f = map_f.reshape(true_param.shape)
     relerr = np.linalg.norm(map_f-true_param)/np.linalg.norm(true_param)
     print('Relative error of MAP compared with the truth %.2f%%' % (relerr*100))
     # report the minimum cost

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Kernel defined by covariance function
--- with kernel choices 'powered exponential' and 'Matern class'
+-- with covariance choices 'powered exponential' and 'Matern class'
 -- classical operations in high dimensions
 ---------------------------------------------------------------
 Shiwei Lan @ ASU, 2022
@@ -11,7 +11,7 @@ __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022"
 __credits__ = ""
 __license__ = "GPL"
-__version__ = "0.1"
+__version__ = "0.2"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@gmail.com;"
 
@@ -36,7 +36,7 @@ class Ker:
         x: inputs
         L: truncation number in Mercer's series
         store_eig: indicator to store eigen-pairs, default to be false
-        ker_opt: kernel option, default to be 'powered exponential'
+        cov_opt: kernel option, default to be 'powered exponential'
         dist_f: distance function, default to be 'minkowski'
         sigma2: magnitude, default to be 1
         l: correlation length, default to be 0.5
@@ -49,7 +49,7 @@ class Ker:
         self.x=x # inputs
         if self.x.ndim==1: self.x=self.x[:,None]
         self.parameters=kwargs # all parameters of the kernel
-        self.ker_opt=self.parameters.get('ker_opt','powexp') # kernel option
+        self.cov_opt=self.parameters.get('cov_opt','powexp') # kernel option
         self.dist_f=self.parameters.get('dist_f','minkowski') # distance function
         self.sigma2=self.parameters.get('sigma2',1) # magnitude
         self.l=self.parameters.get('l',0.5) # correlation length
@@ -113,7 +113,7 @@ class Ker:
         """
         alpha=kwargs.get('alpha',1)
         if alpha==1:
-            kerf=getattr(self,'_'+self.ker_opt) # obtain kernel function
+            kerf=getattr(self,'_'+self.cov_opt) # obtain kernel function
             C=kerf(self.x,**self.dist_kwargs)
         else:
             eigv,eigf=self.eigs() # obtain eigen-basis
@@ -133,7 +133,7 @@ class Ker:
         if not self.spdapx:
             Cv=multf(self.tomat(),v,transp)
         else:
-            kerf=getattr(self,'_'+self.ker_opt) # obtain kernel function
+            kerf=getattr(self,'_'+self.cov_opt) # obtain kernel function
             prun=kwargs.get('prun',True) and self.comm # control of parallel run
             if prun:
                 try:
@@ -249,7 +249,7 @@ if __name__=='__main__':
     
     #     x=np.linspace(0,2*np.pi)[:,np.newaxis]
     x=np.random.randn(100,2)
-    ker=Ker(x,L=10,store_eig=True,ker_opt='matern')
+    ker=Ker(x,L=10,store_eig=True,cov_opt='matern')
     verbose=ker.comm.rank==0 if ker.comm is not None else True
     if verbose:
         print('Eigenvalues :', np.round(ker.eigv[:min(10,ker.L)],4))
@@ -270,7 +270,8 @@ if __name__=='__main__':
     if verbose:
         print('time: %.5f'% (t2-t1))
     
-    invCv=np.linalg.solve(C,v)
+    solver=spsla.spsolve if sps.issparse(C) else spla.solve
+    invCv=solver(C,v)
 #     C_op=spsla.LinearOperator((ker.N,)*2,matvec=lambda v:ker.mult(v))
 #     invCv=spsla.cgs(C_op,v)[0][:,np.newaxis]
     invCv_te=ker.act(v,-1)

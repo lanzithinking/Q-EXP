@@ -14,7 +14,7 @@ __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The Q-EXP project"
 __credits__ = ""
 __license__ = "GPL"
-__version__ = "0.6"
+__version__ = "0.7"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@gmail.com;"
 
@@ -27,16 +27,14 @@ from scipy.stats import gennorm
 # self defined modules
 import sys
 sys.path.append( "../../" )
-# from util.kernel.covf import *
-from util.kernel.serexp import *
-# from util.kernel.graphL import *
+from util.kernel.kernel import Ker
 
 # set to warn only once for the same warnings
 import warnings
 warnings.simplefilter('once')
 warnings.filterwarnings("ignore", category=DeprecationWarning)
     
-class BSV(Ker):
+class BSV:
     def __init__(self,x,L=None,store_eig=False,**kwargs):
         """
         Initialize the Besov class with inputs and kernel settings
@@ -52,55 +50,40 @@ class BSV(Ker):
         spdapx: use speed-up or approximation
         """
         self.x=x # inputs
-        super().__init__(x=self.x, L=L, store_eig=store_eig, **kwargs)
+        self.ker=Ker(x=self.x, L=L, store_eig=store_eig, **kwargs)
         if not hasattr(self,'q'): self.q=kwargs.pop('q',1.0)
     
     def logdet(self):
         """
         Compute log-determinant of the kernel C: log|C|
         """
-        eigv,_=self.eigs()
+        eigv,_=self.ker.eigs()
         abs_eigv=abs(eigv)
         ldet=np.sum(np.log(abs_eigv[abs_eigv>=np.finfo(float).eps]))
         return ldet
     
-    def logpdf(self,X):
+    def logpdf(self,X,incldet=True):
         """
         Compute logpdf of centered Besov distribution X ~ Besov(0,C)
         """
-        eigv,eigf=self.eigs()
-        if not self.spdapx:
-            proj_X = eigf.T.dot(self.act(X, alpha=-1/self.q))
-            q_ldet=-X.shape[1]*self.logdet()/self.q
+        eigv,eigf=self.ker.eigs()
+        if not self.ker.spdapx:
+            proj_X = eigf.T.dot(self.ker.act(X, alpha=-1/self.q))
+            q_ldet=-X.shape[1]*self.logdet()/self.q if incldet else 0
         else:
             qrt_eigv=eigv**(1/self.q)
-            q_ldet=-X.shape[1]*np.sum(np.log(qrt_eigv))
+            q_ldet=-X.shape[1]*np.sum(np.log(qrt_eigv)) if incldet else 0
             proj_X=eigf.T.dot(X)/qrt_eigv[:,None]
         qsum=-0.5*np.sum(abs(proj_X)**self.q)
         logpdf=q_ldet+qsum
         return logpdf,q_ldet
     
-    def update(self,sigma2=None,l=None):
-        """
-        Update the eigen-basis
-        """
-        if sigma2 is not None:
-            sigma2_=self.sigma2
-            self.sigma2=sigma2
-            if self.store_eig:
-                self.eigv*=self.sigma2/sigma2_
-        if l is not None:
-            self.l=l
-            if self.store_eig:
-                self.eigv,self.eigf=self.eigs(upd=True)
-        return self
-    
     def rnd(self,n=1):
         """
         Generate Besov random function (vector) rv ~ Besov(0,C)
         """
-        epd_rv=gennorm.rvs(beta=self.q,scale=2**(1.0/self.q),size=(self.L,n)) # (L,n)
-        eigv,eigf=self.eigs()
+        epd_rv=gennorm.rvs(beta=self.q,scale=2**(1.0/self.q),size=(self.ker.L,n)) # (L,n)
+        eigv,eigf=self.ker.eigs()
         rv=eigf.dot(eigv[:,None]**(1/self.q)*epd_rv) # (N,n)
         return rv
 
@@ -116,10 +99,10 @@ if __name__=='__main__':
     xx,yy=np.meshgrid(np.linspace(0,1,meshsz),np.linspace(0,1,meshsz))
     x=np.stack([xx.flatten(),yy.flatten()]).T
     bsv=BSV(x,L=100,store_eig=True,basis_opt='Fourier', l=.1, q=1.0, spdapx=True) # constrast with q=2.0
-    verbose=bsv.comm.rank==0 if bsv.comm is not None else True
+    verbose=bsv.ker.comm.rank==0 if bsv.ker.comm is not None else True
     if verbose:
-        print('Eigenvalues :', np.round(bsv.eigv[:min(10,bsv.L)],4))
-        print('Eigenvectors :', np.round(bsv.eigf[:,:min(10,bsv.L)],4))
+        print('Eigenvalues :', np.round(bsv.ker.eigv[:min(10,bsv.ker.L)],4))
+        print('Eigenvectors :', np.round(bsv.ker.eigf[:,:min(10,bsv.ker.L)],4))
 
     t1=time.time()
     if verbose:
@@ -127,9 +110,9 @@ if __name__=='__main__':
 
     u_samp=bsv.rnd(n=25)
     v=bsv.rnd(n=2)
-    C=bsv.tomat()
+    C=bsv.ker.tomat()
     Cv=C.dot(v)
-    Cv_te=bsv.act(v)
+    Cv_te=bsv.ker.act(v)
     if verbose:
         print('Relative difference between matrix-vector product and action on vector: {:.4f}'.format(spla.norm(Cv-Cv_te)/spla.norm(Cv)))
 
@@ -140,9 +123,9 @@ if __name__=='__main__':
     v=bsv.rnd(n=2)
     solver=spsla.spsolve if sps.issparse(C) else spla.solve
     invCv=solver(C,v)
-#     C_op=spsla.LinearOperator((bsv.N,)*2,matvec=lambda v:bsv.mult(v))
+#     C_op=spsla.LinearOperator((bsv.ker.N,)*2,matvec=lambda v:bsv.ker.mult(v))
 #     invCv=spsla.cgs(C_op,v)[0][:,np.newaxis]
-    invCv_te=bsv.act(v,-1)
+    invCv_te=bsv.ker.act(v,-1)
     if verbose:
         print('Relatively difference between direct solver and iterative solver: {:.4f}'.format(spla.norm(invCv-invCv_te)/spla.norm(invCv)))
 
@@ -159,7 +142,7 @@ if __name__=='__main__':
     # v=bsv.rnd()
     # h=1e-6
     # dlogpdfv_fd=(bsv.logpdf(u+h*v)[0]-bsv.logpdf(u)[0])/h
-    # dlogpdfv=-bsv.solve(u).T.dot(v)
+    # dlogpdfv=-bsv.ker.solve(u).T.dot(v)
     # rdiff_gradv=np.abs(dlogpdfv_fd-dlogpdfv)/np.linalg.norm(v)
     # if verbose:
     #     print('Relative difference of gradients in a random direction between exact calculation and finite difference: %.10f' % rdiff_gradv)
@@ -170,7 +153,7 @@ if __name__=='__main__':
     import matplotlib.pyplot as plt
     # fig, axes=plt.subplots(nrows=5,ncols=5,sharex=True,sharey=True,figsize=(15,12))
     # for i,ax in enumerate(axes.flat):
-    #     ax.imshow(bsv.eigf[:,i].reshape((int(np.sqrt(bsv.eigf.shape[0])),-1)),origin='lower')
+    #     ax.imshow(bsv.ker.eigf[:,i].reshape((int(np.sqrt(bsv.ker.eigf.shape[0])),-1)),origin='lower')
     #     ax.set_aspect('auto')
     # plt.show()
     

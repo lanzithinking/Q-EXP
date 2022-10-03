@@ -16,7 +16,7 @@ __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2019, TESD project"
 __credits__ = ""
 __license__ = "GPL"
-__version__ = "0.9"
+__version__ = "1.0"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@gmail.com;"
 
@@ -25,20 +25,17 @@ import scipy as sp
 import scipy.linalg as spla
 import scipy.sparse as sps
 import scipy.sparse.linalg as spsla
-import scipy.spatial.distance as spsd
 # self defined modules
 import sys
 sys.path.append( "../../" )
-# from util.kernel.covf import *
-# from util.kernel.serexp import *
-from util.kernel.graphL import *
+from util.kernel.kernel import Ker
 
 # set to warn only once for the same warnings
 import warnings
 warnings.simplefilter('once')
 warnings.filterwarnings("ignore", category=DeprecationWarning)
     
-class GP(Ker):
+class GP:
     def __init__(self,x,L=None,store_eig=False,**kwargs):
         """
         Initialize the GP class with inputs and kernel settings
@@ -56,43 +53,25 @@ class GP(Ker):
         spdapx: use speed-up or approximation
         """
         self.x=x # inputs
-        super().__init__(x=self.x, L=L, store_eig=store_eig, **kwargs)
+        self.ker=Ker(x=self.x, L=L, store_eig=store_eig, **kwargs)
     
     def logdet(self):
         """
         Compute log-determinant of the kernel C: log|C|
         """
-        eigv,_=self.eigs()
+        eigv,_=self.ker.eigs()
         abs_eigv=abs(eigv)
         ldet=np.sum(np.log(abs_eigv[abs_eigv>=np.finfo(np.float).eps]))
         return ldet
     
-    def logpdf(self,X,nu=1,chol=False):
+    def logpdf(self,X,nu=1,chol=False,incldet=True):
         """
         Compute logpdf of centered matrix normal distribution X ~ MN(0,C,nu*I)
         """
-        assert X.ndim==2 and X.shape[0]==self.N, "Non-conforming size!"
-        # if not self.spdapx:
-        #     if chol:
-        #         try:
-        #             cholC,lower=spla.cho_factor(self.tomat())
-        #             half_ldet=-X.shape[1]*np.sum(np.log(np.diag(cholC)))
-        #             quad=X*spla.cho_solve((cholC,lower),X)
-        #         except Exception as e:#spla.LinAlgError:
-        #             warnings.warn('Cholesky decomposition failed: '+str(e))
-        #             chol=False
-        #             pass
-        #     if not chol:
-        #         half_ldet=-X.shape[1]*self.logdet()/2
-        #         quad=X*self.solve(X)
-        # else:
-        #     eigv,eigf=self.eigs(); rteigv=np.sqrt(abs(eigv)+self.jit)#; rteigv[rteigv<self.jit**2]+=self.jit**2
-        #     half_ldet=-X.shape[1]*np.sum(np.log(rteigv))
-        #     half_quad=eigf.T.dot(X)/rteigv[:,None]
-        #     quad=half_quad**2
-        quad=self.act(X,alpha=-0.5,chol=chol)**2 if chol else X*self.act(X,alpha=-1)
+        assert X.ndim==2 and X.shape[0]==self.ker.N, "Non-conforming size!"
+        quad=self.ker.act(X,alpha=-0.5,chol=chol)**2 if chol else X*self.ker.act(X,alpha=-1)
         quad=-0.5*np.sum(quad)/nu
-        half_ldet=-X.shape[1]*self.logdet()/2
+        half_ldet=-X.shape[1]*self.logdet()/2 if incldet else 0
         logpdf=half_ldet+quad
         return logpdf,half_ldet
     
@@ -100,8 +79,8 @@ class GP(Ker):
         """
         Generate Gaussian random function (vector) rv ~ N(MU, C)
         """
-        mvn0I_rv=np.random.randn(self.N,n) # (N,n)
-        rv=self.act(mvn0I_rv,alpha=0.5)
+        mvn0I_rv=np.random.randn(self.ker.N,n) # (N,n)
+        rv=self.ker.act(mvn0I_rv,alpha=0.5)
         if MU is not None:
             rv+=MU
         return rv
@@ -114,20 +93,20 @@ if __name__=='__main__':
     
     x=np.linspace(0,2*np.pi,100)[:,np.newaxis]
     # x=np.random.randn(100,2)
-    gp=GP(x,L=10,store_eig=True,ker_opt='matern',s=1,l=1.,nu=1.5)
-    verbose=gp.comm.rank==0 if gp.comm is not None else True
+    gp=GP(x,L=10,store_eig=True,cov_opt='matern',s=1,l=1.,nu=1.5)
+    verbose=gp.ker.comm.rank==0 if gp.ker.comm is not None else True
     if verbose:
-        print('Eigenvalues :', np.round(gp.eigv[:min(10,gp.L)],4))
-        print('Eigenvectors :', np.round(gp.eigf[:,:min(10,gp.L)],4))
+        print('Eigenvalues :', np.round(gp.ker.eigv[:min(10,gp.ker.L)],4))
+        print('Eigenvectors :', np.round(gp.ker.eigf[:,:min(10,gp.ker.L)],4))
     
     t1=time.time()
     if verbose:
         print('time: %.5f'% (t1-t0))
     
     v=gp.rnd(n=2)
-    C=gp.tomat()
+    C=gp.ker.tomat()
     Cv=C.dot(v)
-    Cv_te=gp.act(v)
+    Cv_te=gp.ker.act(v)
     if verbose:
         print('Relative difference between matrix-vector product and action on vector: {:.4f}'.format(spla.norm(Cv-Cv_te)/spla.norm(Cv)))
     
@@ -138,9 +117,9 @@ if __name__=='__main__':
     v=gp.rnd(n=2)
     solver=spsla.spsolve if sps.issparse(C) else spla.solve
     invCv=solver(C,v)
-#     C_op=spsla.LinearOperator((gp.N,)*2,matvec=lambda v:gp.mult(v))
+#     C_op=spsla.LinearOperator((gp.ker.N,)*2,matvec=lambda v:gp.ker.mult(v))
 #     invCv=spsla.cgs(C_op,v)[0][:,np.newaxis]
-    invCv_te=gp.act(v,-1)
+    invCv_te=gp.ker.act(v,-1)
     if verbose:
         print('Relatively difference between direct solver and iterative solver: {:.4f}'.format(spla.norm(invCv-invCv_te)/spla.norm(invCv)))
     
@@ -157,7 +136,7 @@ if __name__=='__main__':
     v=gp.rnd()
     h=1e-5
     dlogpdfv_fd=(gp.logpdf(u+h*v)[0]-gp.logpdf(u)[0])/h
-    dlogpdfv=-gp.solve(u).T.dot(v)
+    dlogpdfv=-gp.ker.solve(u).T.dot(v)
     rdiff_gradv=np.abs(dlogpdfv_fd-dlogpdfv)/np.linalg.norm(v)
     if verbose:
         print('Relative difference of gradients in a random direction between exact calculation and finite difference: %.10f' % rdiff_gradv)
@@ -167,7 +146,7 @@ if __name__=='__main__':
     # plot some random samples
     import matplotlib.pyplot as plt
     fig, axes=plt.subplots(nrows=1,ncols=2,sharex=False,sharey=False,figsize=(12,5))
-    axes[0].plot(gp.eigf[:,:3])
+    axes[0].plot(gp.ker.eigf[:,:3])
     u=gp.rnd(n=3)
     axes[1].plot(u)
     plt.show()

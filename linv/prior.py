@@ -8,7 +8,7 @@ updated September 20, 2022 for project of q-exponential process prior (Q-EXP)
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The STBP project and the Q-EXP project"
 __license__ = "GPL"
-__version__ = "0.4"
+__version__ = "0.5"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu lanzithinking@outlook.com"
 
@@ -36,6 +36,7 @@ class _gp(GP):
         x=self._mesh(imsz=input) if np.size(input)<=2 and not isinstance(input,str) else input
         self.space=kwargs.pop('space','vec') # alternative 'fun'
         super().__init__(x=x, L=L, store_eig=store_eig, **kwargs)
+        if self.ker.opt=='graphL': self.imsz=self.ker.imsz
         self.mean=mean
     
     def _mesh(self,imsz=None):
@@ -52,7 +53,7 @@ class _gp(GP):
         # print('\nThe mesh is defined.')
         return mesh
     
-    def cost(self,u):
+    def cost(self,u,**kwargs):
         """
         Calculate the logarithm of prior density (and its gradient) of function u.
         """
@@ -61,7 +62,7 @@ class _gp(GP):
         
         u_=u[:,None]
         if self.space=='vec': u_=self.vec2fun(u_)
-        val=-self.logpdf(u_)[0]
+        val=-self.logpdf(u_,incldet=kwargs.pop('incldet',True))[0]
         return val
     
     def grad(self,u):
@@ -74,17 +75,17 @@ class _gp(GP):
         g=self.C_act(u,comp=-1)
         return g
         
-    def sample(self):
+    def sample(self,**kwargs):
         """
         Sample a random function u ~ N(0,_C)
         """
-        Z=np.random.randn({'vec':self.L, 'fun':self.N}[self.space])
-        u=self.C_act(Z,comp=0.5)
+        Z=np.random.randn({'vec':self.ker.L, 'fun':self.ker.N}[self.space])
+        u=self.C_act(Z,comp=0.5,**kwargs)
         if self.mean is not None:
             u+=self.mean
         return u
     
-    def C_act(self,u,comp=1):
+    def C_act(self,u,comp=1,**kwargs):
         """
         Calculate operation of C^comp on vector u: u --> C^comp * u
         """
@@ -94,17 +95,19 @@ class _gp(GP):
         if comp==0:
             return u
         else:
-            eigv, eigf=self.eigs()
-            if comp<0: eigv[abs(eigv)<np.finfo(float).eps]=np.finfo(float).eps
-            Cu=(u if self.space=='vec' else eigf.T.dot(u) if self.space=='fun' else ValueError('Wrong space!'))*eigv**(comp)
-            if self.space=='fun': Cu=eigf.dot(Cu)
+            if self.space=='vec':
+                eigv, eigf=self.ker.eigs()
+                if comp<0: eigv[abs(eigv)<np.finfo(float).eps]=np.finfo(float).eps
+                Cu=u*eigv**(comp)
+            elif self.space=='fun':
+                Cu=self.ker.act(u,alpha=comp,**kwargs)
             return Cu
     
     def vec2fun(self, u_vec):
         """
         Convert vector (u_i) to function (u)
         """
-        eigv, eigf = self.eigs()
+        eigv, eigf = self.ker.eigs()
         u_f = eigf.dot(u_vec)
         return u_f
     
@@ -112,7 +115,7 @@ class _gp(GP):
         """
         Convert vector (u_i) to function (u)
         """
-        eigv, eigf = self.eigs()
+        eigv, eigf = self.ker.eigs()
         u_vec = eigf.T.dot(u_f)
         return u_vec
 
@@ -124,6 +127,7 @@ class _bsv(BSV):
         x=self._mesh(imsz=input) if np.size(input)<=2 and not isinstance(input,str) else input
         self.space=kwargs.pop('space','vec') # alternative 'fun'
         super().__init__(x=x, L=L, store_eig=store_eig, **kwargs)
+        if self.ker.opt=='graphL': self.imsz=self.ker.imsz
         self.mean=mean
     
     def _mesh(self,imsz=None):
@@ -140,7 +144,7 @@ class _bsv(BSV):
         # print('\nThe mesh is defined.')
         return mesh
     
-    def cost(self,u):
+    def cost(self,u,**kwargs):
         """
         Calculate the logarithm of prior density (and its gradient) of function u.
         -.5* ||_C^(-1/q) u(x)||^q = -.5 sum_l |gamma_l^{-1} <phi_l, u>|^q
@@ -160,7 +164,7 @@ class _bsv(BSV):
         if self.mean is not None: u-=self.mean
         if np.ndim(u)>1: u=u.flatten()
         
-        eigv, eigf=self.eigs()
+        eigv, eigf=self.ker.eigs()
         if self.space=='vec':
             proj_u=u/eigv**(1/self.q)
             g=0.5*self.q*abs(proj_u)**(self.q-1) *np.sign(proj_u)/eigv**(1/self.q)
@@ -171,18 +175,18 @@ class _bsv(BSV):
             raise ValueError('Wrong space!')
         return g
     
-    def sample(self):
+    def sample(self,**kwargs):
         """
         Sample a random function u ~ B(0,_C)
         vector u ~ B(0,K): u = gamma |xi|^(1/q), xi ~ EPD(0,1)
         """
         if self.space=='vec':
-            epd_rv=gennorm.rvs(beta=self.q,scale=2**(1.0/self.q),size=self.L) # (L,)
-            eigv,eigf=self.eigs()
+            epd_rv=gennorm.rvs(beta=self.q,scale=2**(1.0/self.q),size=self.ker.L) # (L,)
+            eigv,eigf=self.ker.eigs()
             u=eigv**(1/self.q)*epd_rv # (L,)
         elif self.space=='fun':
             u=super().rnd(n=1).squeeze()
-            # u=u.reshape(self.meshsz)
+            # u=u.reshape(self.imsz)
         else:
             raise ValueError('Wrong space!')
         if self.mean is not None:
@@ -199,7 +203,8 @@ class _bsv(BSV):
         if comp==0:
             return u
         else:
-            eigv, eigf=self.eigs()
+            eigv, eigf=self.ker.eigs()
+            if comp<0: eigv[abs(eigv)<np.finfo(float).eps]=np.finfo(float).eps
             if self.space=='vec':
                 proj_u=u*eigv**(comp)
             elif self.space=='fun':
@@ -216,7 +221,7 @@ class _bsv(BSV):
         """
         Convert vector (u_i) to function (u)
         """
-        eigv, eigf = self.eigs()
+        eigv, eigf = self.ker.eigs()
         u_f = eigf.dot(u_vec)
         return u_f
     
@@ -224,7 +229,7 @@ class _bsv(BSV):
         """
         Convert vector (u_i) to function (u)
         """
-        eigv, eigf = self.eigs()
+        eigv, eigf = self.ker.eigs()
         u_vec = eigf.T.dot(u_f)
         return u_vec
     
@@ -236,6 +241,7 @@ class _qep(qEP):
         x=self._mesh(imsz=input) if np.size(input)<=2 and not isinstance(input,str) else input
         self.space=kwargs.pop('space','vec') # alternative 'fun'
         super().__init__(x=x, L=L, store_eig=store_eig, **kwargs)
+        if self.ker.opt=='graphL': self.imsz=self.ker.imsz
         self.mean=mean
     
     def _mesh(self,imsz=None):
@@ -252,7 +258,7 @@ class _qep(qEP):
         # print('\nThe mesh is defined.')
         return mesh
     
-    def cost(self,u):
+    def cost(self,u,**kwargs):
         """
         Calculate the logarithm of prior density (and its gradient) of function u.
         """
@@ -261,7 +267,7 @@ class _qep(qEP):
         
         u_=u[:,None]
         if self.space=='vec': u_=self.vec2fun(u_)
-        val=-self.logpdf(u_)[0]
+        val=-self.logpdf(u_,incldet=kwargs.pop('incldet',True))[0]
         return val
     
     def grad(self,u):
@@ -273,36 +279,38 @@ class _qep(qEP):
         
         # r=np.sum(self.C_act(u,comp=-.5)**2)
         r=abs(np.sum(u*self.C_act(u,comp=-1)))
-        g=(self.N/2*(1-self.q/2)/r+self.q/4*r**(self.q/2-1))*2*self.C_act(u,comp=-1)
+        g=(self.ker.N/2*(1-self.q/2)/r+self.q/4*r**(self.q/2-1))*2*self.C_act(u,comp=-1)
         return g
     
-    def sample(self, S=None):
+    def sample(self,S=None,**kwargs):
         """
         Sample a random function u ~ qEP(0,_C)
         """
         if S is None:
-            S=np.random.randn({'vec':self.L, 'fun':self.N}[self.space])
+            S=np.random.randn({'vec':self.ker.L, 'fun':self.ker.N}[self.space])
             S/=np.linalg.norm(S)
-        R=np.random.chisquare(df=self.N)**(1./self.q)
-        u=R*self.C_act(S,comp=0.5)
+        R=np.random.chisquare(df=self.ker.N)**(1./self.q)
+        u=R*self.C_act(S,comp=0.5,**kwargs)
         if self.mean is not None:
             u+=self.mean
         return u
     
-    def C_act(self,u,comp=1):
+    def C_act(self,u,comp=1,**kwargs):
         """
         Calculate operation of C^comp on vector u: u --> C^comp * u
         """
         if self.mean is not None: u-=self.mean
         if np.ndim(u)>1: u=u.flatten()
-          
+        
         if comp==0:
             return u
         else:
-            eigv, eigf=self.eigs()
-            if comp<0: eigv[abs(eigv)<np.finfo(float).eps]=np.finfo(float).eps
-            Cu=(u if self.space=='vec' else eigf.T.dot(u) if self.space=='fun' else ValueError('Wrong space!'))*eigv**(comp)
-            if self.space=='fun': Cu=eigf.dot(Cu)
+            if self.space=='vec':
+                eigv, eigf=self.ker.eigs()
+                if comp<0: eigv[abs(eigv)<np.finfo(float).eps]=np.finfo(float).eps
+                Cu=u*eigv**(comp)
+            elif self.space=='fun':
+                Cu=self.ker.act(u,alpha=comp,**kwargs)
             return Cu
     
     def normalize(self,u):
@@ -321,7 +329,7 @@ class _qep(qEP):
         """
         Convert vector (u_i) to function (u)
         """
-        eigv, eigf = self.eigs()
+        eigv, eigf = self.ker.eigs()
         u_f = eigf.dot(u_vec)
         return u_f
     
@@ -329,7 +337,7 @@ class _qep(qEP):
         """
         Convert vector (u_i) to function (u)
         """
-        eigv, eigf = self.eigs()
+        eigv, eigf = self.ker.eigs()
         u_vec = eigf.T.dot(u_f)
         return u_vec
 
@@ -345,9 +353,9 @@ if __name__ == '__main__':
     # define the prior
     prior_option='qep'
     # input=128
-    input='https://static.wikia.nocookie.net/nba/images/b/b4/Arizona_State_Sun_Devils.png'
+    input='satellite.png'
     store_eig=True
-    prior = prior(prior_option=prior_option, input=input, basis_opt='Fourier', q=1., L=100, store_eig=store_eig, space='vec', normalize=True)
+    prior = prior(prior_option=prior_option, ker_opt='graphL', input=input, basis_opt='Fourier', q=1., L=100, store_eig=store_eig, space='vec', normalize=True, weightedge=True)
     # generate sample
     u=prior.sample()
     nlogpri=prior.cost(u)
@@ -361,7 +369,8 @@ if __name__ == '__main__':
     rdiff_gradv=np.abs(ngradv_fd-ngradv)/np.linalg.norm(v)
     print('Relative difference of gradients in a random direction between direct calculation and finite difference: %.10f' % rdiff_gradv)
     # plot
-    if u.shape[0]!=prior.N: u=prior.vec2fun(u)
+    plt.rcParams['image.cmap'] = 'binary'
+    if u.shape[0]!=prior.ker.N: u=prior.vec2fun(u)
     plt.imshow(u.reshape(prior.imsz),origin='lower',extent=[0,1,0,1])
     plt.title(prior_option+' sample', fontsize=16)
     plt.show()

@@ -16,12 +16,14 @@ from Linv import Linv
 seed=2022
 # define the inverse problem
 fltnz = 2
+ker_opt = 'serexp'
 basis_opt = 'Fourier'
 KL_truc = 2000
-sigma = 1
+space = 'fun' if ker_opt=='graphL' else 'vec'
+sigma2 = 1
 s = 1
-store_eig = True
-linv = Linv(fltnz=fltnz, basis_opt=basis_opt, KL_truc=KL_truc, sigma=sigma, s=s, store_eig=store_eig, seed=seed)
+store_eig = (ker_opt!='graphL')
+linv = Linv(fltnz=fltnz, ker_opt=ker_opt, basis_opt=basis_opt, KL_truc=KL_truc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
 
 # models
 pri_mdls=('GP','BSV','qEP')
@@ -35,9 +37,9 @@ if os.path.exists(os.path.join(folder,'mcmc_summary.pckl')):
     f.close()
     print('mcmc_summary.pckl has been read!')
 else:
-    med_v=np.zeros((num_mdls,KL_truc))
-    mean_v=np.zeros((num_mdls,KL_truc))
-    std_v=np.zeros((num_mdls,KL_truc))
+    med_v=np.zeros((num_mdls,linv.prior.ker.N))
+    mean_v=np.zeros((num_mdls,linv.prior.ker.N))
+    std_v=np.zeros((num_mdls,linv.prior.ker.N))
     for m in range(num_mdls):
         print('Processing '+pri_mdls[m]+' prior model...\n')
         fld_m = folder+'/'+pri_mdls[m]
@@ -49,6 +51,7 @@ else:
                     f=open(os.path.join(fld_m,f_i),'rb')
                     f_read=pickle.load(f)
                     samp=f_read[-4]
+                    if linv.prior.space=='vec': samp=linv.prior.vec2fun(samp.T).T
                     med_v[m]=np.median(samp,axis=0)
                     mean_v[m]=np.mean(samp,axis=0)
                     std_v[m]=np.std(samp,axis=0)
@@ -72,7 +75,7 @@ for i,ax in enumerate(axes.flat):
     if i==0:
         img=linv.misfit.truth
     else:
-        img=linv.prior.vec2fun(med_v[i-1]).reshape(linv.misfit.size)
+        img=med_v[i-1].reshape(linv.misfit.size)
     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
     ax.set_title(titles[i],fontsize=16)
     ax.set_aspect('auto')
@@ -90,7 +93,7 @@ for i,ax in enumerate(axes.flat):
     if i==0:
         img=linv.misfit.truth
     else:
-        img=linv.prior.vec2fun(mean_v[i-1]).reshape(linv.misfit.size)
+        img=mean_v[i-1].reshape(linv.misfit.size)
     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
     ax.set_title(titles[i],fontsize=16)
     ax.set_aspect('auto')
@@ -105,7 +108,7 @@ fig,axes = plt.subplots(nrows=num_rows,ncols=num_mdls,sharex=True,sharey=True,fi
 sub_figs = [None]*len(axes.flat)
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
-    img=linv.prior.vec2fun(std_v[i]).reshape(linv.misfit.size)
+    img=std_v[i].reshape(linv.misfit.size)
     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
     ax.set_title(titles[i+1],fontsize=16)
     ax.set_aspect('auto')

@@ -297,7 +297,8 @@ if __name__=='__main__':
     if verbose:
         print('time: %.5f'% (t2-t1))
 
-    invCv=np.linalg.solve(C,v)
+    solver=spsla.spsolve if sps.issparse(C) else spla.solve
+    invCv=solver(C,v)
 #     C_op=spsla.LinearOperator((ker.N,)*2,matvec=lambda v:ker.mult(v))
 #     invCv=spsla.cgs(C_op,v)[0][:,np.newaxis]
     invCv_te=ker.act(v,-1)

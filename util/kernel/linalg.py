@@ -134,3 +134,11 @@ def sparse_cholesky(A,**kwargs):
         return L,P
     else:
         raise Exception('The matrix is not positive semi-definite!')
+    
+def sparse_ldet(A,**kwargs):
+    """
+    log-determinant of sparse matrix
+    """
+    lu=spsla.splu(A,**kwargs)
+    ldet=np.sum(np.log(abs(np.hstack([lu.L.diagonal(),lu.U.diagonal()]))))
+    return ldet

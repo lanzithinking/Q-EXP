@@ -111,6 +111,13 @@ class Ker:
                 P=(eigf*pow(eigv,alpha)).dot(eigf.T)
         return P
     
+    def ldet(self,**kwargs):
+        """
+        Get log-determinant of C=sigma2 P^-s
+        """
+        ldet=self.N*np.log(self.sigma2) - self.s*(sparse_ldet(self.prec()))
+        return ldet
+    
     def tomat(self):
         """
         Get kernel as (covariance) matrix C=sigma2 P^-s
@@ -187,15 +194,20 @@ class Ker:
         elif alpha==-1:
             y=self.solve(x,**kwargs)
         else:
-            # chol= (abs(alpha)==0.5) and kwargs.get('chol',not self.spdapx)
-            # if chol:
-            #     try:
-            #         cholC=spla.cholesky(self.tomat(),lower=True)
-            #         y=multf(cholC,x,transp) if alpha>0 else mdivf(cholC,x,transp)
-            #     except Exception as e:#spla.LinAlgError:
-            #         warnings.warn('Cholesky decomposition failed: '+str(e))
-            #         chol=False; pass
-            # if not chol:
+            chol= (abs(alpha)==0.5) and kwargs.get('chol',not self.spdapx)
+            if chol:
+                try:
+                    if isinstance(self.s,int):
+                        L,P=sparse_cholesky(self.prec())
+                        cholinvC=P.dot(L)**self.s/np.sqrt(self.sigma2)
+                        y=multf(cholinvC,x,transp) if alpha<0 else mdivf(cholinvC,x,transp)
+                    else:
+                        cholC=spla.cholesky(self.tomat(),lower=True)
+                        y=multf(cholC,x,transp) if alpha>0 else mdivf(cholC,x,transp)
+                except Exception as e:#spla.LinAlgError:
+                    warnings.warn('Cholesky decomposition failed: '+str(e))
+                    chol=False; pass
+            if not chol:
                 eigv,eigf=self.eigs(**kwargs)
                 if alpha<0: eigv[abs(eigv)<np.finfo(float).eps]=np.finfo(float).eps
                 y=multf(eigf*pow(eigv,alpha),multf(eigf.T,x,transp),transp)
@@ -239,7 +251,9 @@ if __name__=='__main__':
     if verbose:
         print('time: %.5f'% (t1-t0))
     
-    v=x
+    ldet=ker.ldet()
+    
+    v=np.random.randn(ker.N)
     C=ker.tomat()
     Cv=C.dot(v)
     Cv_te=ker.act(v)
@@ -250,7 +264,8 @@ if __name__=='__main__':
     if verbose:
         print('time: %.5f'% (t2-t1))
     
-    invCv=np.linalg.solve(C,v)
+    solver=spsla.spsolve if sps.issparse(C) else spla.solve
+    invCv=solver(C,v)
 #     C_op=spsla.LinearOperator((ker.N,)*2,matvec=lambda v:ker.mult(v))
 #     invCv=spsla.cgs(C_op,v)[0][:,np.newaxis]
     invCv_te=ker.act(v,-1)
