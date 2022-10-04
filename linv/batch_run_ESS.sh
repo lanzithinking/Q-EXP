@@ -18,7 +18,6 @@ elif [ $# -eq 3 ]; then
 	ker_NO="$2"
 	q="$3"
 fi
-fi
 
 
 if [ ${mdl_NO} -eq 0 ]; then
