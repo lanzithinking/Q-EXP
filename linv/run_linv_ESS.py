@@ -7,6 +7,7 @@ Shiwei Lan @ ASU, 2022
 # modules
 import os,argparse,pickle
 import numpy as np
+from scipy import stats
 import timeit,time
 
 # the inverse problem
@@ -28,7 +29,7 @@ def main(seed=2022):
     parser.add_argument('q', nargs='?', type=int, default=1)
     parser.add_argument('num_samp', nargs='?', type=int, default=10000)
     parser.add_argument('num_burnin', nargs='?', type=int, default=5000)
-    parser.add_argument('mdls', nargs='?', type=str, default=('gp','qep'))
+    parser.add_argument('mdls', nargs='?', type=str, default=('gp','bsv','qep'))
     parser.add_argument('kers', nargs='?', type=str, default=('covf','serexp','graphL'))
     args = parser.parse_args()
     
@@ -50,16 +51,24 @@ def main(seed=2022):
     lik_params={'fltnz':2}
     linv = Linv(**prior_params,**lik_params,seed=seed)
     logLik = lambda u: -linv._get_misfit(u, MF_only=True, incldet=False)
-    rnd_pri = lambda: linv.prior.sample(chol=args.kers[args.ker_NO]=='graphL')
+    rnd_pri = lambda: np.random.randn() if prior_params['prior_option']=='bsv' else linv.prior.sample(chol=args.kers[args.ker_NO]=='graphL')
+    # transformation
+    z = lambda x: 2*stats.norm.cdf(abs(x))-1
+    lmd = lambda x,q=linv.prior.q: 2**(1/q)*np.sign(x)*stats.gamma.ppf(z(x),1/q)**(1/q)
+    T = lambda x,q=linv.prior.q: linv.prior.C_act(lmd(x), 1/q)
     
     # initialization
-    u=linv.misfit.obs.flatten()
-    if linv.prior.space=='vec': u=linv.prior.fun2vec(u)
-    # u+=.1*linv.prior.sample()
-    l=logLik(u)
+    if prior_params['prior_option']=='bsv':
+        u=np.random.randn({'vec':linv.prior.ker.L,'fun':linv.prior.ker.N}[linv.prior.space])
+        l=logLik(T(u))
+    else:
+        u=linv.misfit.obs.flatten()
+        if linv.prior.space=='vec': u=linv.prior.fun2vec(u)
+        # u+=.1*linv.prior.sample()
+        l=logLik(u)
     
     # run MCMC to generate samples
-    print("Running the elliptic slice sampler (ESS) for %s prior model with %s kernel taking random seed %d ..." % ({0:'Gaussian',1:'q-Exponential'}[args.mdl_NO], args.kers[args.ker_NO], args.seed_NO))
+    print("Running the elliptic slice sampler (ESS) for %s prior model with %s kernel taking random seed %d ..." % ({0:'Gaussian',1:'Besov',2:'q-Exponential'}[args.mdl_NO], args.kers[args.ker_NO], args.seed_NO))
     
     samp=[]; loglik=[]; times=[]
     # proc_info=[int(j/100*(args.num_samp+args.num_burnin)) for j in range(5,105,5)]
@@ -71,7 +80,7 @@ def main(seed=2022):
             tic=timeit.default_timer()
             print('\nBurn-in completed; recording samples now...\n')
         # generate MCMC sample with given sampler
-        u,l=ESS(u,l,rnd_pri,logLik)
+        u,l=ESS(u,l,rnd_pri,lambda u:logLik(T(u)) if prior_params['prior_option']=='bsv' else logLik)
         # display acceptance at intervals
         # if i in proc_info:
         #     print('\n %d%% iterations completed.' % (int(i/(args.num_samp+args.num_burnin)*100)))
@@ -79,7 +88,7 @@ def main(seed=2022):
             print('{0:.0f}% has been completed.'.format(np.float(i+1)/(args.num_samp+args.num_burnin)*100))
         # save results
         loglik.append(l)
-        if i>=args.num_burnin: samp.append(u)
+        if i>=args.num_burnin: samp.append(T(u) if prior_params['prior_option']=='bsv' else u)
         times.append(timeit.default_timer()-beginning)
     # stop timer
     toc=timeit.default_timer()

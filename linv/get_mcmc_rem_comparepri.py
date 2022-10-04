@@ -33,7 +33,7 @@ num_mdls=len(pri_mdls)
 rem_m=np.zeros(num_mdls)
 rem_s=np.zeros(num_mdls)
 # obtain estimates
-folder = './result'
+folder = './analysis'
 for m in range(num_mdls):
     print('Processing '+pri_mdls[m]+' prior model...\n')
     fld_m = folder+'/'+pri_mdls[m]
@@ -46,7 +46,7 @@ for m in range(num_mdls):
             try:
                 f=open(os.path.join(fld_m,f_i),'rb')
                 f_read=pickle.load(f)
-                samp=f_read[-4] if m!=1 else f_read[3]
+                samp=f_read[-4]
                 if linv.prior.space=='vec': samp=linv.prior.vec2fun(samp.T).T
                 samp_mean=np.mean(samp,axis=0)
                 # compute error

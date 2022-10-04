@@ -30,7 +30,7 @@ pri_mdls=('GP','BSV','qEP')
 mdl_names=['Gaussian','Besov','q-Exponential']
 num_mdls=len(pri_mdls)
 # obtain estimates
-folder = './result'
+folder = './analysis'
 if os.path.exists(os.path.join(folder,'mcmc_summary.pckl')):
     f=open(os.path.join(folder,'mcmc_summary.pckl'),'rb')
     med_v,mean_v,std_v=pickle.load(f)
@@ -50,7 +50,7 @@ else:
                 try:
                     f=open(os.path.join(fld_m,f_i),'rb')
                     f_read=pickle.load(f)
-                    samp=f_read[-4] if m!=1 else f_read[3]
+                    samp=f_read[-4]
                     if linv.prior.space=='vec': samp=linv.prior.vec2fun(samp.T).T
                     med_v[m]=np.median(samp,axis=0)
                     mean_v[m]=np.mean(samp,axis=0)
@@ -109,9 +109,12 @@ sub_figs = [None]*len(axes.flat)
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
     img=std_v[i].reshape(linv.misfit.size)
-    plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
+    sub_figs[i]=plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
     ax.set_title(titles[i+1],fontsize=16)
     ax.set_aspect('auto')
+# set color bar
+# from util.common_colorbar import common_colorbar
+# fig=common_colorbar(fig,axes,sub_figs)
 plt.subplots_adjust(wspace=0.1, hspace=0.2)
 # save plot
 # fig.tight_layout()
