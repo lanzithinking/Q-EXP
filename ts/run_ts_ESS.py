@@ -1,5 +1,5 @@
 """
-Main function to run elliptic slice sampling for linear inverse problem
+Main function to run elliptic slice sampling for the time series problem
 ----------------------
 Shiwei Lan @ ASU, 2022
 """
@@ -11,7 +11,7 @@ from scipy import stats
 import timeit,time
 
 # the inverse problem
-from Linv import Linv
+from TS import TS
 
 # MCMC
 import sys
@@ -24,13 +24,13 @@ np.set_printoptions(precision=3, suppress=True)
 def main(seed=2022):
     parser = argparse.ArgumentParser()
     parser.add_argument('seed_NO', nargs='?', type=int, default=2022)
-    parser.add_argument('mdl_NO', nargs='?', type=int, default=0)
-    parser.add_argument('ker_NO', nargs='?', type=int, default=1)
+    parser.add_argument('mdl_NO', nargs='?', type=int, default=2)
+    parser.add_argument('ker_NO', nargs='?', type=int, default=0)
     parser.add_argument('q', nargs='?', type=int, default=1)
     parser.add_argument('num_samp', nargs='?', type=int, default=10000)
     parser.add_argument('num_burnin', nargs='?', type=int, default=5000)
     parser.add_argument('mdls', nargs='?', type=str, default=('gp','bsv','qep'))
-    parser.add_argument('kers', nargs='?', type=str, default=('covf','serexp','graphL'))
+    parser.add_argument('kers', nargs='?', type=str, default=('covf','serexp'))
     args = parser.parse_args()
     
     # set random seed
@@ -39,32 +39,32 @@ def main(seed=2022):
     ## define the linear inverse problem ##
     prior_params={'prior_option':args.mdls[args.mdl_NO],
                   'ker_opt':'serexp' if args.mdls[args.mdl_NO]=='bsv' else args.kers[args.ker_NO],
+                  'cov_opt':'matern',
                   'basis_opt':'Fourier', # serexp param
-                  'KL_trunc':2000,
-                  'space':'fun' if args.kers[args.ker_NO]=='graphL' else 'vec',
+                  'KL_trunc':100,
+                  'space':'fun',
                   'sigma2':1,
                   's':1,
                   'q':2 if args.mdls[args.mdl_NO]=='gp' else args.q,
-                  'store_eig':args.kers[args.ker_NO]!='graphL',
-                  'normalize':True, # graphL param
-                  'weightedge':True} # graphL param
-    lik_params={'fltnz':2}
-    linv = Linv(**prior_params,**lik_params,seed=args.seed_NO)
-    logLik = lambda u: -linv._get_misfit(u, MF_only=True, incldet=False)
-    rnd_pri = lambda: np.random.randn({'vec':linv.prior.ker.L,'fun':linv.prior.ker.N}[linv.prior.space]) if prior_params['prior_option']=='bsv' else linv.prior.sample(chol=(args.kers[args.ker_NO]=='graphL'))
+                  'store_eig':True}
+    lik_params={'truth_option':1,
+                'size':200}
+    ts = TS(**prior_params,**lik_params,seed=args.seed_NO)
+    logLik = lambda u: -ts._get_misfit(u, MF_only=True, incldet=False)
+    rnd_pri = lambda: np.random.randn({'vec':ts.prior.ker.L,'fun':ts.prior.ker.N}[ts.prior.space]) if prior_params['prior_option']=='bsv' else ts.prior.sample()
     # transformation
     z = lambda x: 2*stats.norm.cdf(abs(x))-1
     lmd = lambda x,q=prior_params['q']: 2**(1/q)*np.sign(x)*stats.gamma.ppf(z(x),1/q)**(1/q)
-    T = lambda x,q=prior_params['q']: linv.prior.C_act(lmd(x), 1/q)
+    T = lambda x,q=prior_params['q']: ts.prior.C_act(lmd(x), 1/q)
     
     # initialization
     if prior_params['prior_option']=='bsv':
         u=rnd_pri()
         l=logLik(T(u))
     else:
-        u=linv.misfit.obs.flatten()
-        if linv.prior.space=='vec': u=linv.prior.fun2vec(u)
-        # u+=.1*linv.prior.sample()
+        u=ts.misfit.obs.flatten()
+        if ts.prior.space=='vec': u=ts.prior.fun2vec(u)
+        # u+=.1*ts.prior.sample()
         l=logLik(u)
     
     # run MCMC to generate samples
@@ -101,7 +101,7 @@ def main(seed=2022):
     ctime=time.strftime("%Y-%m-%d-%H-%M-%S")
     savepath=os.path.join(os.getcwd(),'result')
     if not os.path.exists(savepath): os.makedirs(savepath)
-    filename='linv_ESS_dim'+str(len(u))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
+    filename='ts_'+ts.misfit.truth_name+'_ESS_dim'+str(len(u))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
     f=open(os.path.join(savepath,filename),'wb')
     pickle.dump([prior_params, lik_params, args, samp,loglik,time_,times],f)
     f.close()

@@ -56,7 +56,7 @@ def main(seed=2022):
                   'normalize':True, # graphL param
                   'weightedge':True} # graphL param
     lik_params={'fltnz':2}
-    linv = Linv(**prior_params,**lik_params,seed=seed)
+    linv = Linv(**prior_params,**lik_params,seed=args.seed_NO)
     logLik = lambda u: -linv._get_misfit(u, MF_only=True, incldet=False)
     # transformation
     z = lambda x: 2*stats.norm.cdf(abs(x))-1

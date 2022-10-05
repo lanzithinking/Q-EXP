@@ -22,8 +22,19 @@ KL_trunc = 2000
 space = 'fun' if ker_opt=='graphL' else 'vec'
 sigma2 = 1
 s = 1
+q = 1
 store_eig = (ker_opt!='graphL')
+prior_params={'ker_opt':ker_opt,
+              'basis_opt':basis_opt, # serexp param
+              'KL_trunc':KL_trunc,
+              'space':space,
+              'sigma2':sigma2,
+              's':s,
+              'q':q,
+              'store_eig':store_eig}
+lik_params={'fltnz':fltnz}
 linv = Linv(fltnz=fltnz, ker_opt=ker_opt, basis_opt=basis_opt, KL_trunc=KL_trunc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
+# truth = linv.misfit.truth
 
 # models
 pri_mdls=('GP','BSV','qEP')
@@ -33,14 +44,19 @@ num_mdls=len(pri_mdls)
 folder = './analysis'
 if os.path.exists(os.path.join(folder,'mcmc_summary.pckl')):
     f=open(os.path.join(folder,'mcmc_summary.pckl'),'rb')
-    med_v,mean_v,std_v=pickle.load(f)
+    truth, med_f,mean_f,std_f=pickle.load(f)
     f.close()
     print('mcmc_summary.pckl has been read!')
 else:
-    med_v=np.zeros((num_mdls,linv.prior.ker.N))
-    mean_v=np.zeros((num_mdls,linv.prior.ker.N))
-    std_v=np.zeros((num_mdls,linv.prior.ker.N))
+    med_f=[[]]*num_mdls
+    mean_f=[[]]*num_mdls
+    std_f=[[]]*num_mdls
     for m in range(num_mdls):
+        # preparation
+        prior_params['prior_option']={'GP':'gp','BSV':'bsv','qEP':'qep'}[pri_mdls[m]]
+        if prior_params['prior_option']=='gp': prior_params['q']=2
+        linv = Linv(**prior_params,**lik_params,seed=seed)
+        truth = linv.misfit.truth
         print('Processing '+pri_mdls[m]+' prior model...\n')
         fld_m = folder+'/'+pri_mdls[m]
         # preparation for estimates
@@ -52,16 +68,16 @@ else:
                     f_read=pickle.load(f)
                     samp=f_read[-4]
                     if linv.prior.space=='vec': samp=linv.prior.vec2fun(samp.T).T
-                    med_v[m]=np.median(samp,axis=0)
-                    mean_v[m]=np.mean(samp,axis=0)
-                    std_v[m]=np.std(samp,axis=0)
+                    med_f[m]=np.median(samp,axis=0)
+                    mean_f[m]=np.mean(samp,axis=0)
+                    std_f[m]=np.std(samp,axis=0)
                     f.close()
                     print(f_i+' has been read!'); break
                 except:
                     pass
     # save
     f=open(os.path.join(folder,'mcmc_summary.pckl'),'wb')
-    pickle.dump([med_v,mean_v,std_v],f)
+    pickle.dump([truth,med_f,mean_f,std_f],f)
     f.close()
 
 # plot 
@@ -73,9 +89,9 @@ titles = ['Truth']+mdl_names
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
     if i==0:
-        img=linv.misfit.truth
+        img=truth
     else:
-        img=med_v[i-1].reshape(linv.misfit.size)
+        img=med_f[i-1].reshape(linv.misfit.size)
     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
     ax.set_title(titles[i],fontsize=16)
     ax.set_aspect('auto')
@@ -91,9 +107,9 @@ titles = ['Truth']+mdl_names
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
     if i==0:
-        img=linv.misfit.truth
+        img=truth
     else:
-        img=mean_v[i-1].reshape(linv.misfit.size)
+        img=mean_f[i-1].reshape(linv.misfit.size)
     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
     ax.set_title(titles[i],fontsize=16)
     ax.set_aspect('auto')
@@ -108,7 +124,7 @@ fig,axes = plt.subplots(nrows=num_rows,ncols=num_mdls,sharex=True,sharey=True,fi
 sub_figs = [None]*len(axes.flat)
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
-    img=std_v[i].reshape(linv.misfit.size)
+    img=std_f[i].reshape(linv.misfit.size)
     sub_figs[i]=plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
     ax.set_title(titles[i+1],fontsize=16)
     ax.set_aspect('auto')
