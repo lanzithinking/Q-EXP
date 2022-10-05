@@ -51,15 +51,15 @@ def main(seed=2022):
     lik_params={'fltnz':2}
     linv = Linv(**prior_params,**lik_params,seed=seed)
     logLik = lambda u: -linv._get_misfit(u, MF_only=True, incldet=False)
-    rnd_pri = lambda: np.random.randn() if prior_params['prior_option']=='bsv' else linv.prior.sample(chol=args.kers[args.ker_NO]=='graphL')
+    rnd_pri = lambda: np.random.randn({'vec':linv.prior.ker.L,'fun':linv.prior.ker.N}[linv.prior.space]) if prior_params['prior_option']=='bsv' else linv.prior.sample(chol=(args.kers[args.ker_NO]=='graphL'))
     # transformation
     z = lambda x: 2*stats.norm.cdf(abs(x))-1
-    lmd = lambda x,q=linv.prior.q: 2**(1/q)*np.sign(x)*stats.gamma.ppf(z(x),1/q)**(1/q)
-    T = lambda x,q=linv.prior.q: linv.prior.C_act(lmd(x), 1/q)
+    lmd = lambda x,q=prior_params['q']: 2**(1/q)*np.sign(x)*stats.gamma.ppf(z(x),1/q)**(1/q)
+    T = lambda x,q=prior_params['q']: linv.prior.C_act(lmd(x), 1/q)
     
     # initialization
     if prior_params['prior_option']=='bsv':
-        u=np.random.randn({'vec':linv.prior.ker.L,'fun':linv.prior.ker.N}[linv.prior.space])
+        u=rnd_pri()
         l=logLik(T(u))
     else:
         u=linv.misfit.obs.flatten()
@@ -80,7 +80,7 @@ def main(seed=2022):
             tic=timeit.default_timer()
             print('\nBurn-in completed; recording samples now...\n')
         # generate MCMC sample with given sampler
-        u,l=ESS(u,l,rnd_pri,lambda u:logLik(T(u)) if prior_params['prior_option']=='bsv' else logLik)
+        u,l=ESS(u,l,rnd_pri,lambda u:logLik(T(u)) if prior_params['prior_option']=='bsv' else logLik(u))
         # display acceptance at intervals
         # if i in proc_info:
         #     print('\n %d%% iterations completed.' % (int(i/(args.num_samp+args.num_burnin)*100)))

@@ -54,6 +54,7 @@ class GP:
         """
         self.x=x # inputs
         self.ker=Ker(x=self.x, L=L, store_eig=store_eig, **kwargs)
+        self.q=2
     
     def logdet(self):
         """

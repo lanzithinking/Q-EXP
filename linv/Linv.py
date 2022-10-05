@@ -238,7 +238,7 @@ if __name__ == '__main__':
     linv.test(1e-8)
     # obtain MAP
     map = linv.get_MAP(SAVE=True)
-    print('MAP estimate: '+(min(len(map),10)*"%.4f ") % tuple(map[:min(len(map_v),10)]) )
+    print('MAP estimate: '+(min(len(map),10)*"%.4f ") % tuple(map[:min(len(map),10)]) )
     #  compare it with the truth
     true_param = linv.misfit.truth
     map_f = linv.prior.vec2fun(map) if linv.prior.space=='vec' else map
@@ -246,7 +246,7 @@ if __name__ == '__main__':
     relerr = np.linalg.norm(map_f-true_param)/np.linalg.norm(true_param)
     print('Relative error of MAP compared with the truth %.2f%%' % (relerr*100))
     # report the minimum cost
-    # min_cost = lrz._get_misfit(map_v)
+    # min_cost = lrz._get_misfit(map)
     # print('Minimum cost: %.4f' % min_cost)
     # plot MAP
     import matplotlib.pyplot as plt

@@ -54,7 +54,7 @@ class qEP:
         """
         self.x=x # inputs
         self.ker=Ker(x=self.x, L=L, store_eig=store_eig, **kwargs)
-        if not hasattr(self,'q'): self.q=kwargs.pop('q',1.0)
+        self.q=kwargs.pop('q',1)
     
     def logdet(self):
         """
