@@ -14,7 +14,7 @@ from TS import TS
 
 seed=2022
 # define the inverse problem
-truth_option = 0
+truth_option = 1
 size = 200
 ker_opt = 'covf'
 cov_opt = 'matern'
@@ -55,8 +55,8 @@ if not os.path.exists(os.path.join(folder,'ts_'+ts.misfit.truth_name+'_mcmc_summ
 for m in range(num_mdls):
     # preparation
     prior_params['prior_option']={'GP':'gp','BSV':'bsv','qEP':'qep'}[pri_mdls[m]]
-    if prior_params['prior_option']=='bsv': prior_params['ker_opt']='serexp'
-    if prior_params['prior_option']=='gp': prior_params['q']=2
+    prior_params['ker_opt']='serexp' if prior_params['prior_option']=='bsv' else ker_opt
+    prior_params['q']=2 if prior_params['prior_option']=='gp' else q
     ts = TS(**prior_params,**lik_params,seed=seed)
     truth = ts.misfit.truth
     print('Processing '+pri_mdls[m]+' prior model...\n')

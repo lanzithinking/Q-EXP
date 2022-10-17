@@ -51,7 +51,7 @@ if not os.path.exists(os.path.join(folder,'mcmc_summary.pckl')):
 for m in range(num_mdls):
     # preparation
     prior_params['prior_option']={'GP':'gp','BSV':'bsv','qEP':'qep'}[pri_mdls[m]]
-    if prior_params['prior_option']=='gp': prior_params['q']=2
+    prior_params['q']=2 if prior_params['prior_option']=='gp' else q
     linv = Linv(**prior_params,**lik_params,seed=seed)
     truth = linv.misfit.truth
     print('Processing '+pri_mdls[m]+' prior model...\n')

@@ -23,8 +23,8 @@ np.set_printoptions(precision=3, suppress=True)
 
 def main(seed=2022):
     parser = argparse.ArgumentParser()
-    parser.add_argument('seed_NO', nargs='?', type=int, default=2022)
-    parser.add_argument('mdl_NO', nargs='?', type=int, default=2)
+    # parser.add_argument('seed_NO', nargs='?', type=int, default=2022)
+    parser.add_argument('mdl_NO', nargs='?', type=int, default=0)
     parser.add_argument('ker_NO', nargs='?', type=int, default=0)
     parser.add_argument('q', nargs='?', type=int, default=1)
     parser.add_argument('num_samp', nargs='?', type=int, default=10000)
@@ -34,7 +34,8 @@ def main(seed=2022):
     args = parser.parse_args()
     
     # set random seed
-    np.random.seed(args.seed_NO)
+    # np.random.seed(args.seed_NO)
+    np.random.seed(seed)
     
     ## define the linear inverse problem ##
     prior_params={'prior_option':args.mdls[args.mdl_NO],
@@ -47,9 +48,10 @@ def main(seed=2022):
                   's':1,
                   'q':2 if args.mdls[args.mdl_NO]=='gp' else args.q,
                   'store_eig':True}
-    lik_params={'truth_option':1,
+    lik_params={'truth_option':0,
                 'size':200}
-    ts = TS(**prior_params,**lik_params,seed=args.seed_NO)
+    # ts = TS(**prior_params,**lik_params,seed=args.seed_NO)
+    ts = TS(**prior_params,**lik_params,seed=seed)
     logLik = lambda u: -ts._get_misfit(u, MF_only=True, incldet=False)
     rnd_pri = lambda: np.random.randn({'vec':ts.prior.ker.L,'fun':ts.prior.ker.N}[ts.prior.space]) if prior_params['prior_option']=='bsv' else ts.prior.sample()
     # transformation
@@ -68,7 +70,8 @@ def main(seed=2022):
         l=logLik(u)
     
     # run MCMC to generate samples
-    print("Running the elliptic slice sampler (ESS) for %s prior model with %s kernel taking random seed %d ..." % ({0:'Gaussian',1:'Besov',2:'q-Exponential'}[args.mdl_NO], args.kers[args.ker_NO], args.seed_NO))
+    # print("Running the elliptic slice sampler (ESS) for %s prior model with %s kernel taking random seed %d ..." % ({0:'Gaussian',1:'Besov',2:'q-Exponential'}[args.mdl_NO], args.kers[args.ker_NO], args.seed_NO))
+    print("Running the elliptic slice sampler (ESS) for %s prior model with %s kernel taking random seed %d ..." % ({0:'Gaussian',1:'Besov',2:'q-Exponential'}[args.mdl_NO], args.kers[args.ker_NO], seed))
     
     samp=[]; loglik=[]; times=[]
     # proc_info=[int(j/100*(args.num_samp+args.num_burnin)) for j in range(5,105,5)]
@@ -107,15 +110,15 @@ def main(seed=2022):
     f.close()
 
 if __name__ == '__main__':
-    main()
-    # n_seed = 10; i=0; n_success=0
-    # while n_success < n_seed:
-    #     seed_i=2022+i*10
-    #     try:
-    #         print("Running for seed %d ...\n"% (seed_i))
-    #         main(seed=seed_i)
-    #         n_success+=1
-    #     except Exception as e:
-    #         print(e)
-    #         pass
-    #     i+=1
+    # main()
+    n_seed = 9; i=1; n_success=0
+    while n_success < n_seed:
+        seed_i=2022+i*10
+        try:
+            print("Running for seed %d ...\n"% (seed_i))
+            main(seed=seed_i)
+            n_success+=1
+        except Exception as e:
+            print(e)
+            pass
+        i+=1

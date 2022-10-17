@@ -59,8 +59,8 @@ else:
         fld_m = folder+'/'+pri_mdls[m]
         # preparation for estimates
         prior_params['prior_option']={'GP':'gp','BSV':'bsv','qEP':'qep'}[pri_mdls[m]]
-        if prior_params['prior_option']=='bsv': prior_params['ker_opt']='serexp'
-        if prior_params['prior_option']=='gp': prior_params['q']=2
+        prior_params['ker_opt']='serexp' if prior_params['prior_option']=='bsv' else ker_opt
+        prior_params['q']=2 if prior_params['prior_option']=='gp' else q
         ts = TS(**prior_params,**lik_params,seed=seed)
         truth = ts.misfit.truth
         if os.path.exists(fld_m):
