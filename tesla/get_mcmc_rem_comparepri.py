@@ -47,7 +47,7 @@ num_mdls=len(pri_mdls)
 rem_m=np.zeros(num_mdls)
 rem_s=np.zeros(num_mdls)
 # obtain estimates
-folder = './analysis/'+'nl0.05_50' #ts.misfit.truth_name
+folder = './analysis/'+'nl0.05_60' #ts.misfit.truth_name
 if not os.path.exists(os.path.join(folder,'Tesla_'+ts.misfit.truth_name+'_mcmc_summary.pckl')):
     med_f=[[]]*num_mdls
     mean_f=[[]]*num_mdls
