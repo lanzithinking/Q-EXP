@@ -14,7 +14,7 @@ __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The Q-EXP project"
 __credits__ = ""
 __license__ = "GPL"
-__version__ = "0.2"
+__version__ = "0.3"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@gmail.com;"
 
@@ -23,7 +23,6 @@ import scipy as sp
 import scipy.linalg as spla
 import scipy.sparse as sps
 import scipy.sparse.linalg as spsla
-from scipy.special import gammaln
 # self defined modules
 import sys
 sys.path.append( "../../" )
@@ -76,9 +75,9 @@ class qEP:
             half_ldet=-X.shape[1]*self.logdet()/2 if incldet else 0
             quad=-0.5*np.sum(norms)
             log_r=np.log(np.sum(norms))*self.ker.N/2*(1-2/self.q)
-            # scal_fctr=X.shape[1]*(np.log(self.ker.N)+gammaln(self.ker.N/2)-self.ker.N/2*np.log(np.pi)-gammaln(1+self.ker.N/self.q)-(1+self.ker.N/self.q)*np.log(2))
+            # scal_fctr=X.shape[1]*(np.log(self.ker.q)-self.ker.N/2*np.log(np.pi)-(1+self.N/2)*np.log(2))
             logpdf=half_ldet+quad+log_r#+scal_fctr
-            return logpdf,quad#,scal_fctr
+            return logpdf,half_ldet#,scal_fctr
         elif out=='norms':
             return norms
     
@@ -88,7 +87,8 @@ class qEP:
         """
         uS_rv=np.random.randn(self.ker.N,n) # (N,n)
         uS_rv/=np.linalg.norm(uS_rv,axis=0,keepdims=True)
-        rv=np.random.gamma(shape=self.ker.N/2,scale=2,size=n)**(1./self.q)*self.ker.act(uS_rv,alpha=0.5)
+        # rv=np.random.gamma(shape=self.ker.N/2,scale=2,size=n)**(1./self.q)*self.ker.act(uS_rv,alpha=0.5)
+        rv=np.random.chisquare(df=self.ker.N,size=n)**(1./self.q)*self.ker.act(uS_rv,alpha=0.5)
         if MU is not None:
             rv+=MU
         return rv

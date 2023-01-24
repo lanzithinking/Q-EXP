@@ -23,8 +23,8 @@ np.set_printoptions(precision=3, suppress=True)
 
 def main(seed=2022):
     parser = argparse.ArgumentParser()
-    parser.add_argument('mdl_NO', nargs='?', type=int, default=0)
-    parser.add_argument('ker_NO', nargs='?', type=int, default=2)
+    parser.add_argument('mdl_NO', nargs='?', type=int, default=2)
+    parser.add_argument('ker_NO', nargs='?', type=int, default=1)
     parser.add_argument('q', nargs='?', type=int, default=1)
     parser.add_argument('mdls', nargs='?', type=str, default=('gp','bsv','qep'))
     parser.add_argument('kers', nargs='?', type=str, default=('covf','serexp','graphL'))
@@ -35,7 +35,8 @@ def main(seed=2022):
     
     ## define the linear inverse problem ##
     prior_params={'prior_option':args.mdls[args.mdl_NO],
-                  'ker_opt':'serexp' if args.mdls[args.mdl_NO]=='bsv' else args.kers[args.ker_NO],
+                  # 'ker_opt':'serexp' if args.mdls[args.mdl_NO]=='bsv' else args.kers[args.ker_NO],
+                  'ker_opt':{'gp':'graphL','bsv':'serexp','qep':args.kers[args.ker_NO]}[args.mdls[args.mdl_NO]],
                   'basis_opt':'Fourier', # serexp param
                   'KL_trunc':2000,
                   'space':'fun' if args.kers[args.ker_NO]=='graphL' else 'vec',

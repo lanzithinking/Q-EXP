@@ -11,7 +11,7 @@ __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022"
 __credits__ = ""
 __license__ = "GPL"
-__version__ = "0.2"
+__version__ = "0.3"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@gmail.com;"
 
@@ -81,7 +81,7 @@ class Ker:
         Powered exponential kernel: C(x,y)=sigma2*exp(-.5*(||x-y||/l)^s)
         """
         if len(args)==1:
-            C=spsd.squareform(np.exp(-.5*pow(spsd.pdist(args[0],self.dist_f,**kwargs)/self.l,self.s)))+(1.+self.jit)*np.eye(self.N)
+            C=spsd.squareform(np.exp(-.5*pow(spsd.pdist(args[0],self.dist_f,**kwargs)/self.l,self.s)))+(1.+self.jit)*sps.eye(self.N)
         elif len(args)==2:
             C=np.exp(-.5*pow(spsd.cdist(args[0],args[1],self.dist_f,**kwargs)/self.l,self.s))
         else:
@@ -215,7 +215,7 @@ class Ker:
             chol= (abs(alpha)==0.5) and kwargs.get('chol',not self.spdapx)
             if chol:
                 try:
-                    cholC=spla.cholesky(self.tomat(),lower=True)
+                    cholC=spla.cholesky(self.tomat(),lower=not kwargs.get('adjt',False))
                     y=multf(cholC,x,transp) if alpha>0 else mdivf(cholC,x,transp)
                 except Exception as e:#spla.LinAlgError:
                     warnings.warn('Cholesky decomposition failed: '+str(e))

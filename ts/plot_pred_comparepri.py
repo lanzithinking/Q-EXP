@@ -15,7 +15,7 @@ from TS import TS
 
 seed=2022
 # define the inverse problem
-truth_option = 0
+truth_option = 1
 size = 200
 ker_opt = 'covf'
 cov_opt = 'matern'
@@ -88,6 +88,8 @@ else:
     f.close()
 
 # plot 
+plt.rc('xtick', labelsize=16) 
+plt.rc('ytick', labelsize=16)
 # plt.rcParams['image.cmap'] = 'binary'
 num_rows=1
 # posterior median
@@ -102,7 +104,7 @@ for i,ax in enumerate(axes.flat):
     ax.fill_between(ts.misfit.times[te_idx],pred_m[i]-1.96*pred_s[i],pred_m[i]+1.96*pred_s[i],color='red',alpha=.2)
     # ax.scatter(ts.misfit.times, ts.misfit.obs, color='orange')
     ax.plot([ts.misfit.times[tr_idx]]*2,[np.zeros(len(tr_idx))-(truth_option+1)*.5,.1*np.ones(len(tr_idx))-(truth_option+1)*.5], color='black', linewidth=.5)
-    ax.set_title(titles[i],fontsize=16)
+    ax.set_title(titles[i],fontsize=18)
     ax.set_aspect('auto')
 plt.subplots_adjust(wspace=0.1, hspace=0.2)
 # save plot

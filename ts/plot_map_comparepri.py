@@ -35,7 +35,7 @@ if os.path.exists(os.path.join(folder,'ts_'+msft.truth_name+'_map_summary.pckl')
     f=open(os.path.join(folder,'ts_'+msft.truth_name+'_map_summary.pckl'),'rb')
     truth,maps,funs,errs=pickle.load(f)
     f.close()
-    print('mcmc_summary.pckl has been read!')
+    print('map_summary.pckl has been read!')
 else:
     pckl_files=[f for f in os.listdir(folder) if f.endswith('.pckl')]
     maps=[]; funs=[]; errs=[]
@@ -63,7 +63,9 @@ else:
     pickle.dump([truth,maps,funs,errs],f)
     f.close()
 
-# plot 
+# plot
+plt.rc('xtick', labelsize=16) 
+plt.rc('ytick', labelsize=16)
 # plt.rcParams['image.cmap'] = 'binary'
 num_rows=1
 # posterior median
@@ -73,8 +75,8 @@ for i,ax in enumerate(axes.flat):
     plt.axes(ax)
     ax.plot(msft.times, msft.truth)
     ax.plot(msft.times, maps[i], linewidth=2, linestyle='--', color='red')
-    ax.scatter(msft.times, msft.obs, color='orange')
-    ax.set_title(titles[i],fontsize=16)
+    ax.scatter(msft.times, msft.obs, color='orange', s=10)
+    ax.set_title(titles[i],fontsize=18)
     ax.set_aspect('auto')
 plt.subplots_adjust(wspace=0.1, hspace=0.2)
 # save plot
@@ -89,9 +91,9 @@ for i,ax in enumerate(axes.flat):
     plt.axes(ax)
     plt.plot(np.arange(1,N+1),{0:funs,1:errs}[i][:,:N].T)
     plt.yscale('log')
-    ax.set_xlabel('iteration',fontsize=15)
-    ax.set_ylabel({0:'negative posterior',1:'relative error'}[i],fontsize=15)
-    ax.legend(labels=mdl_names,fontsize=14)
+    ax.set_xlabel('iteration',fontsize=18)
+    ax.set_ylabel({0:'negative posterior',1:'relative error'}[i],fontsize=18)
+    ax.legend(labels=mdl_names,fontsize=16)
     ax.set_aspect('auto')
 plt.subplots_adjust(wspace=0.25, hspace=0.2)
 # save plot

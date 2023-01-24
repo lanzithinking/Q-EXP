@@ -71,7 +71,7 @@ class BSV:
             proj_X = eigf.T.dot(self.ker.act(X, alpha=-1/self.q))
             q_ldet=-X.shape[1]*self.logdet()/self.q if incldet else 0
         else:
-            qrt_eigv=eigv**(1/self.q)
+            qrt_eigv=abs(eigv)**(1/self.q)
             q_ldet=-X.shape[1]*np.sum(np.log(qrt_eigv)) if incldet else 0
             proj_X=eigf.T.dot(X)/qrt_eigv[:,None]
         qsum=-0.5*np.sum(abs(proj_X)**self.q)

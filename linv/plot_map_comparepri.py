@@ -9,18 +9,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mp
 
-# # the inverse problem
-# from Linv import Linv
-#
-# seed=2022
-# # define the inverse problem
-# fltnz = 2
-# basis_opt = 'Fourier'
-# KL_trunc = 2000
-# sigma2 = 1
-# s = 1
-# store_eig = True
-# linv = Linv(fltnz=fltnz, basis_opt=basis_opt, KL_trunc=KL_trunc, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
+# the inverse problem
+from Linv import Linv
+
+seed=2022
+# define the inverse problem
+fltnz = 2
+basis_opt = 'Fourier'
+KL_trunc = 2000
+sigma2 = 1
+s = 1
+store_eig = True
+linv = Linv(fltnz=fltnz, basis_opt=basis_opt, KL_trunc=KL_trunc, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
 
 # models
 pri_mdls=('gp','bsv','qep')
@@ -32,7 +32,7 @@ if os.path.exists(os.path.join(folder,'map_summary.pckl')):
     f=open(os.path.join(folder,'map_summary.pckl'),'rb')
     truth,maps,funs,errs=pickle.load(f)
     f.close()
-    print('mcmc_summary.pckl has been read!')
+    print('map_summary.pckl has been read!')
 else:
     pckl_files=[f for f in os.listdir(folder) if f.endswith('.pckl')]
     maps=[]; funs=[]; errs=[]
@@ -60,15 +60,33 @@ else:
     pickle.dump([truth,maps,funs,errs],f)
     f.close()
 
+# # plot 
+# plt.rcParams['image.cmap'] = 'binary'
+# num_rows=1
+# # posterior median
+# fig,axes = plt.subplots(nrows=num_rows,ncols=1+num_mdls,sharex=True,sharey=True,figsize=(16,4))
+# titles = ['Truth']+mdl_names
+# for i,ax in enumerate(axes.flat):
+#     plt.axes(ax)
+#     img=truth if i==0 else maps[i-1]
+#     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
+#     ax.set_title(titles[i],fontsize=16)
+#     ax.set_aspect('auto')
+# plt.subplots_adjust(wspace=0.1, hspace=0.2)
+# # save plot
+# # fig.tight_layout()
+# plt.savefig(folder+'/maps_comparepri.png',bbox_inches='tight')
+# # plt.show()
+
 # plot 
 plt.rcParams['image.cmap'] = 'binary'
 num_rows=1
 # posterior median
-fig,axes = plt.subplots(nrows=num_rows,ncols=1+num_mdls,sharex=True,sharey=True,figsize=(16,4))
-titles = ['Truth']+mdl_names
+fig,axes = plt.subplots(nrows=num_rows,ncols=2+num_mdls,sharex=True,sharey=True,figsize=(20,4))
+titles = ['Truth','Observation']+mdl_names
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
-    img=truth if i==0 else maps[i-1]
+    img=truth if i==0 else linv.misfit.obs if i==1 else maps[i-2]
     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
     ax.set_title(titles[i],fontsize=16)
     ax.set_aspect('auto')
