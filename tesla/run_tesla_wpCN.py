@@ -42,6 +42,7 @@ def main(seed=2022):
     
     # set random seed
     np.random.seed(args.seed_NO)
+    # np.random.seed(seed)
     
     ## define the linear inverse problem ##
     prior_params={'prior_option':args.mdls[args.mdl_NO],
@@ -50,12 +51,12 @@ def main(seed=2022):
                   'basis_opt':'Fourier', # serexp param
                   'KL_trunc':100,
                   'space':'fun',
-                  'sigma2':1,
+                  'sigma2':100,# if args.mdls[args.mdl_NO]=='gp' else 1,
                   's':1,
                   'q':2 if args.mdls[args.mdl_NO]=='gp' else args.q,
                   'store_eig':True}
-    lik_params={'truth_option':0,
-                'size':200}
+    lik_params={'start_date':'2022-01-01',
+                'end_date':'2023-01-01'}
     ts = Tesla(**prior_params,**lik_params,seed=args.seed_NO)
     logLik = lambda u: -ts._get_misfit(u, MF_only=True, incldet=False)
     # transformation
@@ -107,7 +108,7 @@ def main(seed=2022):
     ctime=time.strftime("%Y-%m-%d-%H-%M-%S")
     savepath=os.path.join(os.getcwd(),'result')
     if not os.path.exists(savepath): os.makedirs(savepath)
-    filename='Tesla_'+ts.misfit.truth_name+'_wpCN_dim'+str(len(u))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
+    filename='Tesla_'+str(ts.misfit.size)+'days_wpCN_dim'+str(len(u))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
     f=open(os.path.join(savepath,filename),'wb')
     pickle.dump([prior_params, lik_params, args, samp,loglik,time_,times],f)
     f.close()

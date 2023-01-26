@@ -14,14 +14,14 @@ from Tesla import Tesla
 
 seed=2022
 # define the inverse problem
-truth_option = 2
-size = 252 if truth_option==0 else 100 if truth_option==1 else 60
+start_date='2022-01-01'
+end_date='2023-01-01'
 ker_opt = 'covf'
 cov_opt = 'matern'
 basis_opt = 'Fourier'
 KL_trunc = 100
 space = 'fun'
-sigma2 = 1
+sigma2 = 100
 s = 1
 q = 1
 store_eig = True
@@ -34,23 +34,21 @@ prior_params={'ker_opt':ker_opt,
               's':s,
               'q':q,
               'store_eig':store_eig}
-lik_params={'truth_option':truth_option,
-                'size':size}
+lik_params={'start_date':start_date,
+            'end_date':end_date}
 ts = Tesla(**prior_params,**lik_params,seed=seed)
-#ts = Covid(truth_option=truth_option, cov_opt=cov_opt, basis_opt=basis_opt, KL_trunc=KL_trunc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed)
-# truth = ts.misfit.truth
 
 # models
 pri_mdls=('GP','BSV','qEP')
 mdl_names=['Gaussian','Besov','q-Exponential']
 num_mdls=len(pri_mdls)
 # obtain estimates
-folder = './analysis/'+'nl0.05_60' #ts.misfit.truth_name
-if os.path.exists(os.path.join(folder,'Tesla_'+ts.misfit.truth_name+'_mcmc_summary.pckl')):
-    f=open(os.path.join(folder,'Tesla_'+ts.misfit.truth_name+'_mcmc_summary.pckl'),'rb')
-    truth,med_f,mean_f,std_f=pickle.load(f)
+folder = './analysis'
+if os.path.exists(os.path.join(folder,'Tesla_'+str(ts.misfit.size)+'days_mcmc_summary.pckl')):
+    f=open(os.path.join(folder,'Tesla_'+str(ts.misfit.size)+'days_mcmc_summary.pckl'),'rb')
+    dat,med_f,mean_f,std_f=pickle.load(f)
     f.close()
-    print('Tesla_'+ts.misfit.truth_name+'_mcmc_summary.pckl has been read!')
+    print('Tesla_'+str(ts.misfit.size)+'days_mcmc_summary.pckl has been read!')
 else:
     med_f=[[]]*num_mdls
     mean_f=[[]]*num_mdls
@@ -65,7 +63,7 @@ else:
         if prior_params['prior_option']=='gp':
             prior_params['sigma2'] = 100
         ts = Tesla(**prior_params,**lik_params,seed=seed)
-        truth = ts.misfit.truth
+        dat = ts.misfit.obs
         if os.path.exists(fld_m):
             pckl_files=[f for f in os.listdir(fld_m) if f.endswith('.pckl')]
             for f_i in pckl_files:
@@ -82,8 +80,8 @@ else:
                 except:
                     pass
     # save
-    f=open(os.path.join(folder,'Tesla_'+ts.misfit.truth_name+'_mcmc_summary.pckl'),'wb')
-    pickle.dump([truth,med_f,mean_f,std_f],f)
+    f=open(os.path.join(folder,'Tesla_'+str(ts.misfit.size)+'days_mcmc_summary.pckl'),'wb')
+    pickle.dump([dat,med_f,mean_f,std_f],f)
     f.close()
     
 import matplotlib.dates as mdates
@@ -95,17 +93,16 @@ fig,axes = plt.subplots(nrows=num_rows,ncols=num_mdls,sharex=True,sharey=True,fi
 titles = mdl_names
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-    plt.gca().xaxis.set_major_locator(mdates.AutoDateLocator())
-    ax.plot(ts.misfit.times, truth)
-    ax.scatter(ts.misfit.times, ts.misfit.obs, color='orange')
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax.scatter(ts.misfit.times, ts.misfit.obs, color='orange',s=10)
     ax.plot(ts.misfit.times, mean_f[i], linewidth=2, linestyle='--', color='red')
     ax.fill_between(ts.misfit.times,mean_f[i]-1.96*std_f[i],mean_f[i]+1.96*std_f[i],color='b',alpha=.2)
-    ax.set_title(titles[i],fontsize=16)
+    ax.set_title(titles[i],fontsize=18)
     plt.gcf().autofmt_xdate()
     ax.set_aspect('auto')
 plt.subplots_adjust(wspace=0.1, hspace=0.2)
 # save plot
 # fig.tight_layout()
-plt.savefig(folder+'/Tesla_'+ts.misfit.truth_name+'_mcmc_estimates_comparepri.png',bbox_inches='tight')
+plt.savefig(folder+'/Tesla_'+str(ts.misfit.size)+'days_mcmc_estimates_comparepri.png',bbox_inches='tight')
 # plt.show()

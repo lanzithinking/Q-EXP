@@ -24,7 +24,7 @@ np.set_printoptions(precision=3, suppress=True)
 def main(seed=2022):
     parser = argparse.ArgumentParser()
     # parser.add_argument('seed_NO', nargs='?', type=int, default=2022)
-    parser.add_argument('mdl_NO', nargs='?', type=int, default=0)
+    parser.add_argument('mdl_NO', nargs='?', type=int, default=2)
     parser.add_argument('ker_NO', nargs='?', type=int, default=0)
     parser.add_argument('q', nargs='?', type=int, default=1)
     parser.add_argument('num_samp', nargs='?', type=int, default=10000)
@@ -36,8 +36,7 @@ def main(seed=2022):
     # set random seed
     # np.random.seed(args.seed_NO)
     np.random.seed(seed)
-    opt=2
-    size = 252 if opt==0 else 100 if opt==1 else 60
+    
     ## define the linear inverse problem ##
     prior_params={'prior_option':args.mdls[args.mdl_NO],
                   'ker_opt':'serexp' if args.mdls[args.mdl_NO]=='bsv' else args.kers[args.ker_NO],
@@ -45,15 +44,12 @@ def main(seed=2022):
                   'basis_opt':'Fourier', # serexp param
                   'KL_trunc':100,
                   'space':'fun',
-                  'sigma2':1,
+                  'sigma2':100,# if args.mdls[args.mdl_NO]=='gp' else 1,
                   's':1,
                   'q':2 if args.mdls[args.mdl_NO]=='gp' else args.q,
                   'store_eig':True}
-    lik_params={'truth_option':opt,
-                'size':size}
-    if args.mdls[args.mdl_NO]=='gp':
-        prior_params['sigma2'] = 100
-    # ts = TS(**prior_params,**lik_params,seed=args.seed_NO)
+    lik_params={'start_date':'2022-01-01',
+                'end_date':'2023-01-01'}
     ts = Tesla(**prior_params,**lik_params,seed=seed)
     logLik = lambda u: -ts._get_misfit(u, MF_only=True, incldet=False)
     rnd_pri = lambda: np.random.randn({'vec':ts.prior.ker.L,'fun':ts.prior.ker.N}[ts.prior.space]) if prior_params['prior_option']=='bsv' else ts.prior.sample()
@@ -107,14 +103,14 @@ def main(seed=2022):
     ctime=time.strftime("%Y-%m-%d-%H-%M-%S")
     savepath=os.path.join(os.getcwd(),'result')
     if not os.path.exists(savepath): os.makedirs(savepath)
-    filename='Tesla_'+ts.misfit.truth_name+'_ESS_dim'+str(len(u))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
+    filename='Tesla_'+str(ts.misfit.size)+'days_ESS_dim'+str(len(u))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
     f=open(os.path.join(savepath,filename),'wb')
     pickle.dump([prior_params, lik_params, args, samp,loglik,time_,times],f)
     f.close()
 
 if __name__ == '__main__':
     # main()
-    n_seed = 9; i=1; n_success=0
+    n_seed = 10; i=0; n_success=0
     while n_success < n_seed:
         seed_i=2022+i*10
         try:

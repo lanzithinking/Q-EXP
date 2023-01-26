@@ -6,7 +6,6 @@ Created October 4, 2022 for project of q-exponential process prior (Q-EXP)
 """
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The Q-EXP project"
-__credits__ = "Mirjeta Pasha"
 __license__ = "GPL"
 __version__ = "0.1"
 __maintainer__ = "Shiwei Lan"

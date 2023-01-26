@@ -1,5 +1,5 @@
 """
-Main function to obtain maximum a posterior (MAP) for the time series problem with some data held out
+Main function to obtain maximum a posterior (MAP) for the time series problem
 ----------------------
 Shiwei Lan @ ASU, 2022
 """
@@ -12,7 +12,6 @@ import timeit,time
 
 # the inverse problem
 from Tesla import Tesla
-from prior import *
 
 # MCMC
 import sys
@@ -24,7 +23,7 @@ np.set_printoptions(precision=3, suppress=True)
     
 def main(seed=2022):
     parser = argparse.ArgumentParser()
-    parser.add_argument('mdl_NO', nargs='?', type=int, default=2)
+    parser.add_argument('mdl_NO', nargs='?', type=int, default=1)
     parser.add_argument('ker_NO', nargs='?', type=int, default=0)
     parser.add_argument('q', nargs='?', type=int, default=1)
     parser.add_argument('mdls', nargs='?', type=str, default=('gp','bsv','qep'))
@@ -41,25 +40,13 @@ def main(seed=2022):
                   'basis_opt':'Fourier', # serexp param
                   'KL_trunc':100,
                   'space':'fun',
-                  'sigma2':1000,# if args.mdls[args.mdl_NO]=='gp' else 100,
+                  'sigma2':100,# if args.mdls[args.mdl_NO]=='gp' else 1,
                   's':1,
                   'q':2 if args.mdls[args.mdl_NO]=='gp' else args.q,
                   'store_eig':True}
     lik_params={'start_date':'2022-01-01',
                 'end_date':'2023-01-01'}
     ts = Tesla(**prior_params,**lik_params,seed=seed)
-    dat = ts.misfit.obs
-    
-    # train index
-    # tr_idx = np.hstack([np.arange(int(ts.misfit.size/2),dtype=int),int(ts.misfit.size/2)+np.arange(0,int(ts.misfit.size/8*3),2,dtype=int)])
-    tr_idx = np.hstack([np.arange(0,int(ts.misfit.size/2),2,dtype=int),
-                        int(ts.misfit.size/2)+np.arange(0,int(ts.misfit.size/4),4,dtype=int),
-                        int(ts.misfit.size/2)+int(ts.misfit.size/4)+np.arange(0,int(ts.misfit.size/4),8,dtype=int)])
-    ts.misfit.size=len(tr_idx)
-    ts.misfit.times=ts.misfit.times[tr_idx]
-    ts.misfit.obs=ts.misfit.obs[tr_idx]
-    if np.size(ts.misfit.nzvar)>1: ts.misfit.nzvar=ts.misfit.nzvar[tr_idx]
-    ts.prior=prior(input=ts.misfit.times,**prior_params)
     dat = ts.misfit.obs
     
     # optimize
@@ -97,7 +84,7 @@ def main(seed=2022):
     MAP=ts.prior.vec2fun(res.x) if ts.prior.space=='vec' else res.x; funs=np.stack(FUN); errs=np.stack(ERR)
     # name file
     ctime=time.strftime("%Y-%m-%d-%H-%M-%S")
-    savepath=os.path.join(os.getcwd(),'MAP_hldout')
+    savepath=os.path.join(os.getcwd(),'MAP')
     if not os.path.exists(savepath): os.makedirs(savepath)
     filename='Tesla_'+str(ts.misfit.size)+'days_MAP_dim'+str(len(MAP))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
     f=open(os.path.join(savepath,filename),'wb')

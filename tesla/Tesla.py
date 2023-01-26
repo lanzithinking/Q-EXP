@@ -8,7 +8,7 @@ Created January 20, 2023 for project of q-exponential process prior (Q-EXP)
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The Q-EXP project"
 __license__ = "GPL"
-__version__ = "0.1"
+__version__ = "0.2"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@outlook.com"
 
@@ -46,7 +46,7 @@ class Tesla:
         self.misfit = misfit(**kwargs)
         print('\nLikelihood model is obtained.')
         # set prior
-        self.prior = prior(input=self.misfit.size,L=self.KL_trunc,**kwargs)
+        self.prior = prior(input=(self.misfit.times-self.misfit.times[0])/(self.misfit.times[-1]-self.misfit.times[0]),L=self.KL_trunc,**kwargs)
         print('\nPrior model is specified.')
         # set low-rank approximate Gaussian posterior
         # self.post_Ga = Gaussian_apx_posterior(self.prior,eigs='hold')
@@ -122,8 +122,8 @@ class Tesla:
         sep = "\n"+"#"*80+"\n"
         print( sep, "Find the MAP point", sep)
         # set up initial point
-        # param0 = self.prior.sample()
-        param0 = self.misfit.obs.flatten()
+        param0 = self.prior.sample()
+        # param0 = self.misfit.obs.flatten()
         if self.prior.space=='vec': param0=self.prior.fun2vec(param0)
         fun = lambda parameter: self._get_misfit(parameter, MF_only=False)
         grad = lambda parameter: self._get_grad(parameter, MF_only=False)
@@ -178,7 +178,6 @@ class Tesla:
         """
         # random sample parameter
         parameter = self.prior.sample()
-        # parameter = np.log(list(self.misfit.true_params.values())) + .1*np.random.randn(len(self.x[PARAMETER]))
         
         # MF_only = True
         import time
@@ -208,17 +207,18 @@ class Tesla:
         print('Time used is %.4f' % (end-start))
     
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
     # set up random seed
-      
-    seed, opt=2022, 2 #0-opt, 1-diff or  2-opt, 0-diff
-    nzlvl=0.005
-    np.random.seed(seed)
-    
-    size = 252 if opt==0 else 100 if opt==1 else 60
-    
-    # define Bayesian inverse problem
-    
-    
+    seed=2022
+    # define Bayesian inverse problem 
+    start_date='2022-01-01'
+    end_date='2023-01-01'
+    # days = 251
+    nzlvl=0.1
+    lik_params={'start_date':start_date,
+                'end_date':end_date,
+                'nzlvl':nzlvl}
     map_fl,relerr_l = [],[]
     for prior_name in ['gp','bsv','qep']:
         prior_params={'prior_option':prior_name,
@@ -227,73 +227,61 @@ if __name__ == '__main__':
                       'basis_opt':'Fourier', # serexp param
                       'KL_trunc':100,
                       'space':'fun',
-                      'sigma2':1,
+                      'sigma2':100 if prior_name=='gp' else 1,
                       's':1,
                       'q':2 if prior_name=='gp' else 1,
                       'store_eig':True}
-        lik_params={'truth_option':opt,
-                    'size':size,
-                    }
-        
-        if prior_name=='gp':
-            prior_params['sigma2'] = 100
-        ts = Tesla(**prior_params,**lik_params, nzlvl=nzlvl,seed=seed)
+        ts = Tesla(**prior_params,**lik_params,seed=seed)
         # test
         ts.test(1e-8)
         # obtain MAP
-        map = ts.get_MAP(SAVE=True, save_name='MAP_'+ts.misfit.truth_name+'_'+prior_params['prior_option'])
+        map = ts.get_MAP(SAVE=True, save_name='MAP_'+str(ts.misfit.size)+'days_'+prior_params['prior_option'])
         print('MAP estimate: '+(min(len(map),10)*"%.4f ") % tuple(map[:min(len(map),10)]) )
-        #  compare it with the truth
-        true_param = ts.misfit.truth
+        #  compare it with the data
+        dat = ts.misfit.obs
         map_f = ts.prior.vec2fun(map) if ts.prior.space=='vec' else map
-        map_f = map_f.reshape(true_param.shape)
+        map_f = map_f.reshape(dat.shape)
         map_fl.append(map_f)
-        relerr = np.linalg.norm(map_f-true_param)/np.linalg.norm(true_param)
+        relerr = np.linalg.norm(map_f-dat)/np.linalg.norm(dat)
         relerr_l.append(relerr)
-        print('Relative error of MAP compared with the truth %.2f%%' % (relerr*100))
-    # report the minimum cost
-    # min_cost = lrz._get_misfit(map)
-    # print('Minimum cost: %.4f' % min_cost)
-    # plot single MAP
-    import matplotlib.pyplot as plt
-    import matplotlib.dates as mdates
-
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-    plt.gca().xaxis.set_major_locator(mdates.AutoDateLocator())
-    plt.gcf().autofmt_xdate()
-    plt.plot(ts.misfit.times, true_param, label='truth')
-    plt.plot(ts.misfit.times, map_f, linewidth=2, linestyle='--', color='red', label = 'MAP')
-    plt.scatter(ts.misfit.times, ts.misfit.obs, color='orange', label='obs')
-    
-    plt.legend()
-    plt.title('MAP ('+ts.misfit.truth_name+f') for %s' %(prior_params['prior_option']),fontsize=16)
-    savepath='./properties'
-    if not os.path.exists(savepath): os.makedirs(savepath)
-    plt.savefig(os.path.join(savepath,'truth_map_'+ts.misfit.truth_name+'_'+prior_params['prior_option']+'.png'),bbox_inches='tight')
-    # plt.show()
+        print('Relative RMSE of MAP compared with the data %.2f%%' % (relerr*100))
+        
+        # plot single MAP
+        fig,ax = plt.subplots()
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.gcf().autofmt_xdate()
+        ax.plot(ts.misfit.times, map_f, linewidth=2, linestyle='--', color='blue', label = 'MAP')
+        ax.scatter(ts.misfit.times, ts.misfit.obs, color='orange', label='obs', s=15)
+        plt.legend()
+        plt.title('MAP ('+str(ts.misfit.size)+'_days'+f') for %s' %(prior_params['prior_option']),fontsize=16)
+        savepath='./properties'
+        if not os.path.exists(savepath): os.makedirs(savepath)
+        plt.savefig(os.path.join(savepath,'MAP_'+str(ts.misfit.size)+'days_'+prior_params['prior_option']+'.png'),bbox_inches='tight')
+        # plt.show()
     
     
     # plot MAP comparison
     num_rows=1
     mdl_names=['Gaussian','Besov','q-Exponential']
+    num_mdls=len(mdl_names)
 
     # posterior median
-    fig,axes = plt.subplots(nrows=num_rows,ncols=3,sharex=True,sharey=True,figsize=(16,5))
+    fig,axes = plt.subplots(nrows=num_rows,ncols=num_mdls,sharex=True,sharey=True,figsize=(16,5))
     titles = mdl_names
     for i,ax in enumerate(axes.flat):
         plt.axes(ax)
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        plt.gca().xaxis.set_major_locator(mdates.AutoDateLocator())
-        ax.plot(ts.misfit.times, ts.misfit.truth)
-        ax.plot(ts.misfit.times, map_fl[i], linewidth=2, linestyle='--', color='red')
-        ax.scatter(ts.misfit.times, ts.misfit.obs, color='orange')
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        ax.plot(ts.misfit.times, map_fl[i], linewidth=2, linestyle='--', color='blue')
+        ax.scatter(ts.misfit.times, ts.misfit.obs, color='orange', s=10)
         plt.gcf().autofmt_xdate()
-        ax.set_title(titles[i],fontsize=16)
+        ax.set_title(titles[i],fontsize=18)
         ax.set_aspect('auto')
     plt.subplots_adjust(wspace=0.1, hspace=0.2)
     # save plot
     # fig.tight_layout()
     folder = './MAP'
     os.makedirs(folder, exist_ok=True)
-    plt.savefig(os.path.join(folder,f'Tesla_nl{nzlvl}__'+ts.misfit.truth_name+'_maps_comparepri.png'),bbox_inches='tight')
+    plt.savefig(os.path.join(folder,f'Tesla_nl{nzlvl}_'+str(ts.misfit.size)+'days_maps_comparepri.png'),bbox_inches='tight')
     # plt.show()

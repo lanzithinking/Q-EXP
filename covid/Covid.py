@@ -122,8 +122,8 @@ class Covid:
         sep = "\n"+"#"*80+"\n"
         print( sep, "Find the MAP point", sep)
         # set up initial point
-        # param0 = self.prior.sample()
-        param0 = self.misfit.obs.flatten()
+        param0 = self.prior.sample()
+        # param0 = self.misfit.obs.flatten()
         if self.prior.space=='vec': param0=self.prior.fun2vec(param0)
         fun = lambda parameter: self._get_misfit(parameter, MF_only=False)
         grad = lambda parameter: self._get_grad(parameter, MF_only=False)
@@ -178,7 +178,6 @@ class Covid:
         """
         # random sample parameter
         parameter = self.prior.sample()
-        # parameter = np.log(list(self.misfit.true_params.values())) + .1*np.random.randn(len(self.x[PARAMETER]))
         
         # MF_only = True
         import time
@@ -209,92 +208,88 @@ class Covid:
     
 if __name__ == '__main__':
     # set up random seed
-      
-    seed, opt, diff=2022, 2, 0 #0-opt, 1-diff or  2-opt, 0-diff
-    nzlvl=0.005
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    
+    seed, opt, diff=2022, 0, 0 #0-opt, 1-diff or  2-opt, 0-diff
+    nzlvl={0:0.001,2:0.005}[opt]
     np.random.seed(seed)
     if not diff:
         size = 229 if opt==0 else 100 if opt==1 else 50
     else:
         size = 228 if opt==0 else 100
-    # define Bayesian inverse problem
-    
     
     map_fl,relerr_l = [],[]
     for prior_name in ['gp','bsv','qep']:
+        # define Bayesian inverse problem
         prior_params={'prior_option':prior_name,
                       'ker_opt':'covf',
                       'cov_opt':'matern',
                       'basis_opt':'Fourier', # serexp param
                       'KL_trunc':100,
                       'space':'fun',
-                      'sigma2':1,
+                      'sigma2':{0:100,2:1}[opt],
                       's':1,
                       'q':2 if prior_name=='gp' else 1,
                       'store_eig':True}
-        lik_params={'truth_option':opt,
+        lik_params={'data_option':opt,
                     'size':size,
-                    'diff':diff}
+                    'diff':diff,
+                    'nzlvl':nzlvl}
         
-        if prior_name=='gp':
-            prior_params['sigma2'] = 40
-        ts = Covid(**prior_params,**lik_params, nzlvl=nzlvl,seed=seed)
+        # if prior_name=='gp' and opt==0:
+        #     prior_params['sigma2'] = 1000
+        ts = Covid(**prior_params,**lik_params,seed=seed)
         # test
         ts.test(1e-8)
         # obtain MAP
-        map = ts.get_MAP(SAVE=True, save_name='MAP_'+ts.misfit.truth_name+'_'+prior_params['prior_option'])
+        map = ts.get_MAP(SAVE=True, save_name='MAP_'+ts.misfit.data_name+'_'+prior_params['prior_option'])
         print('MAP estimate: '+(min(len(map),10)*"%.4f ") % tuple(map[:min(len(map),10)]) )
-        #  compare it with the truth
-        true_param = ts.misfit.truth
+        #  compare it with the data
+        dat = ts.misfit.obs
         map_f = ts.prior.vec2fun(map) if ts.prior.space=='vec' else map
-        map_f = map_f.reshape(true_param.shape)
+        map_f = map_f.reshape(dat.shape)
         map_fl.append(map_f)
-        relerr = np.linalg.norm(map_f-true_param)/np.linalg.norm(true_param)
+        relerr = np.linalg.norm(map_f-dat)/np.linalg.norm(dat)
         relerr_l.append(relerr)
-        print('Relative error of MAP compared with the truth %.2f%%' % (relerr*100))
-    # report the minimum cost
-    # min_cost = lrz._get_misfit(map)
-    # print('Minimum cost: %.4f' % min_cost)
-    # plot single MAP
-    import matplotlib.pyplot as plt
-    import matplotlib.dates as mdates
-
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-    plt.gca().xaxis.set_major_locator(mdates.AutoDateLocator())
-    plt.gcf().autofmt_xdate()
-    plt.plot(ts.misfit.times, true_param, label='truth')
-    plt.plot(ts.misfit.times, map_f, linewidth=2, linestyle='--', color='red', label = 'MAP')
-    plt.scatter(ts.misfit.times, ts.misfit.obs, color='orange', label='obs')
+        print('Relative RMSE of MAP compared with the data %.2f%%' % (relerr*100))
     
-    plt.legend()
-    plt.title('MAP ('+ts.misfit.truth_name+f') for %s' %(prior_params['prior_option']),fontsize=16)
-    savepath='./properties'
-    if not os.path.exists(savepath): os.makedirs(savepath)
-    plt.savefig(os.path.join(savepath,'truth_map_'+ts.misfit.truth_name+'_'+prior_params['prior_option']+'.png'),bbox_inches='tight')
-    # plt.show()
+        # plot single MAP
+        fig,ax = plt.subplots()
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.gcf().autofmt_xdate()
+        ax.plot(ts.misfit.times, map_f, linewidth=2, linestyle='--', color='blue', label = 'MAP')
+        ax.scatter(ts.misfit.times, ts.misfit.obs, color='orange', label='obs', s=15)
+        plt.legend()
+        plt.title('MAP ('+ts.misfit.data_name+f') for %s' %(prior_params['prior_option']),fontsize=16)
+        savepath='./properties'
+        if not os.path.exists(savepath): os.makedirs(savepath)
+        plt.savefig(os.path.join(savepath,'MAP_'+ts.misfit.data_name+'_'+prior_params['prior_option']+'.png'),bbox_inches='tight')
+        # plt.show()
     
     
     # plot MAP comparison
     num_rows=1
     mdl_names=['Gaussian','Besov','q-Exponential']
+    num_mdls=len(mdl_names)
 
     # posterior median
-    fig,axes = plt.subplots(nrows=num_rows,ncols=3,sharex=True,sharey=True,figsize=(16,5))
+    fig,axes = plt.subplots(nrows=num_rows,ncols=num_mdls,sharex=True,sharey=True,figsize=(16,5))
     titles = mdl_names
     for i,ax in enumerate(axes.flat):
         plt.axes(ax)
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        plt.gca().xaxis.set_major_locator(mdates.AutoDateLocator())
-        ax.plot(ts.misfit.times, ts.misfit.truth)
-        ax.plot(ts.misfit.times, map_fl[i], linewidth=2, linestyle='--', color='red')
-        ax.scatter(ts.misfit.times, ts.misfit.obs, color='orange')
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        ax.plot(ts.misfit.times, map_fl[i], linewidth=2, linestyle='--', color='blue')
+        ax.scatter(ts.misfit.times, ts.misfit.obs, color='orange', s=10)
         plt.gcf().autofmt_xdate()
-        ax.set_title(titles[i],fontsize=16)
+        ax.set_title(titles[i],fontsize=18)
         ax.set_aspect('auto')
     plt.subplots_adjust(wspace=0.1, hspace=0.2)
     # save plot
     # fig.tight_layout()
     folder = './MAP'
     os.makedirs(folder, exist_ok=True)
-    plt.savefig(os.path.join(folder,f'Covid_nl{nzlvl}__'+ts.misfit.truth_name+'_maps_comparepri.png'),bbox_inches='tight')
+    plt.savefig(os.path.join(folder,f'Covid_nl{nzlvl}_'+ts.misfit.data_name+'_maps_comparepri.png'),bbox_inches='tight')
     # plt.show()

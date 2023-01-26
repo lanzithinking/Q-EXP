@@ -37,7 +37,7 @@ prior_params={'ker_opt':ker_opt,
               'store_eig':store_eig}
 lik_params={'truth_option':truth_option,
                 'size':size}
-ts = TS(truth_option=truth_option, cov_opt=cov_opt, basis_opt=basis_opt, KL_trunc=KL_trunc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed)
+ts = TS(**prior_params,**lik_params,seed=seed)
  # train index
 tr_idx = np.hstack([np.arange(int(ts.misfit.size/2),dtype=int),int(ts.misfit.size/2)+np.arange(0,int(ts.misfit.size/8*3),2,dtype=int)])
 te_idx = np.setdiff1d(np.arange(ts.misfit.size),tr_idx)
@@ -88,7 +88,7 @@ else:
     f.close()
 
 # plot 
-plt.rc('xtick', labelsize=16) 
+plt.rc('xtick', labelsize=16)
 plt.rc('ytick', labelsize=16)
 # plt.rcParams['image.cmap'] = 'binary'
 num_rows=1

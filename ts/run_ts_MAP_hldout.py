@@ -60,7 +60,7 @@ def main(seed=2022):
     ts.prior=prior(input=ts.misfit.times,**prior_params)
     truth = ts.misfit.truth
     
-    # run MCMC to generate samples
+    # optimize
     print("Obtaining MAP estimate for %s prior model with %s kernel ..." % ({0:'Gaussian',1:'Besov',2:'q-Exponential'}[args.mdl_NO], args.kers[args.ker_NO]))
     
     param0 = ts.misfit.obs.flatten()

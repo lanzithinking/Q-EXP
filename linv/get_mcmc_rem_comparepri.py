@@ -1,5 +1,5 @@
 """
-Get relative error of mean for uncertainty field u in linear inverse problem.
+Get relative error of MAP for uncertainty field u in linear inverse problem.
 ----------------------
 Shiwei Lan @ ASU, 2022
 """
