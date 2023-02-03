@@ -55,7 +55,7 @@ def mdivf(a,b,transp=False):
     matrix division (multiply by inverse) function a*b^(-1) with a being a (square) matrix, b being a vector, matrix or 3d array
     'transp' indicates whether b is transposed already; returning result is in the same layout as b
     """
-    solver=spsla.spsolve if sps.issparse(a) else lambda a,b: spla.solve(a,b,assume_a='pos' if np.allclose(a,a.T) else 'gen')
+    solver=spsla.spsolve if sps.issparse(a) else lambda a,b: spla.solve(a,b,assume_a='sym' if np.allclose(a,a.T) else 'gen')
     if transp:
         if np.ndim(b)<=2: # optional
             c=solver(a,b.T).T
@@ -119,7 +119,7 @@ def matnrnd(M=None,U=1,V=1,n=1):
         else:
             X+=M[:,:,np.resize(np.arange(K),n)]
     return X
-
+    
 def sparse_cholesky(A,**kwargs):
     """
     Cholesky decomposition for sparse matrix: the input matrix A must be a sparse symmetric positive semi-definite

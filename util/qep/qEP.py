@@ -14,7 +14,7 @@ __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The Q-EXP project"
 __credits__ = ""
 __license__ = "GPL"
-__version__ = "0.3"
+__version__ = "0.4"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@gmail.com;"
 
@@ -54,6 +54,7 @@ class qEP:
         self.x=x # inputs
         self.ker=Ker(x=self.x, L=L, store_eig=store_eig, **kwargs)
         self.q=kwargs.pop('q',1)
+        self.ker.sigma2*=self.ker.N**(1-2/self.q) # scale the covariance
     
     def logdet(self):
         """
