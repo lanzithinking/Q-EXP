@@ -8,7 +8,7 @@ updated September 20, 2022 for project of q-exponential process prior (Q-EXP)
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The STBP project and the Q-EXP project"
 __license__ = "GPL"
-__version__ = "0.5"
+__version__ = "0.6"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu lanzithinking@outlook.com"
 
@@ -57,7 +57,7 @@ class _gp(GP):
         """
         Calculate the logarithm of prior density (and its gradient) of function u.
         """
-        if self.mean is not None: u-=self.mean
+        if self.mean is not None: u=u-self.mean
         if np.ndim(u)>1: u=u.flatten()
         
         u_=u[:,None]
@@ -69,7 +69,7 @@ class _gp(GP):
         """
         Calculate the gradient of log-prior
         """
-        if self.mean is not None: u-=self.mean
+        if self.mean is not None: u=u-self.mean
         if np.ndim(u)>1: u=u.flatten()
         
         g=self.C_act(u,comp=-1)
@@ -89,7 +89,7 @@ class _gp(GP):
         """
         Calculate operation of C^comp on vector u: u --> C^comp * u
         """
-        if self.mean is not None: u-=self.mean
+        if self.mean is not None: u=u-self.mean
         if np.ndim(u)>1: u=u.flatten()
           
         if comp==0:
@@ -149,7 +149,7 @@ class _bsv(BSV):
         Calculate the logarithm of prior density (and its gradient) of function u.
         -.5* ||_C^(-1/q) u(x)||^q = -.5 sum_l |gamma_l^{-1} <phi_l, u>|^q
         """
-        if self.mean is not None: u-=self.mean
+        if self.mean is not None: u=u-self.mean
         if np.ndim(u)>1: u=u.flatten()
         
         proj_u=self.C_act(u, -1.0/self.q, proj=True)
@@ -161,7 +161,7 @@ class _bsv(BSV):
         """
         Calculate the gradient of log-prior
         """
-        if self.mean is not None: u-=self.mean
+        if self.mean is not None: u=u-self.mean
         if np.ndim(u)>1: u=u.flatten()
         
         eigv, eigf=self.ker.eigs()
@@ -197,7 +197,7 @@ class _bsv(BSV):
         """
         Calculate operation of C^comp on vector u: u --> C^comp * u
         """
-        if self.mean is not None: u-=self.mean
+        if self.mean is not None: u=u-self.mean
         if np.ndim(u)>1: u=u.flatten()
           
         if comp==0:
@@ -262,7 +262,7 @@ class _qep(qEP):
         """
         Calculate the logarithm of prior density (and its gradient) of function u.
         """
-        if self.mean is not None: u-=self.mean
+        if self.mean is not None: u=u-self.mean
         if np.ndim(u)>1: u=u.flatten()
         
         u_=u[:,None]
@@ -274,7 +274,7 @@ class _qep(qEP):
         """
         Calculate the gradient of log-prior
         """
-        if self.mean is not None: u-=self.mean
+        if self.mean is not None: u=u-self.mean
         if np.ndim(u)>1: u=u.flatten()
         
         # r=np.sum(self.C_act(u,comp=-.5)**2)
@@ -299,7 +299,7 @@ class _qep(qEP):
         """
         Calculate operation of C^comp on vector u: u --> C^comp * u
         """
-        if self.mean is not None: u-=self.mean
+        if self.mean is not None: u=u-self.mean
         if np.ndim(u)>1: u=u.flatten()
         
         if comp==0:
@@ -317,7 +317,7 @@ class _qep(qEP):
         """
         Normalize function u -> r(u)^(-.5)*L^(-1)u, where r(u) = ||u||^2_C and C=LL'
         """
-        if self.mean is not None: u-=self.mean
+        if self.mean is not None: u=u-self.mean
         if np.ndim(u)>1: u=u.flatten()
         
         r=np.sum(self.C_act(u,comp=-.5)**2)

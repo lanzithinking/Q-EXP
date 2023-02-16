@@ -88,7 +88,7 @@ class Ker:
         Get graph Laplacian from the connection graph
         """
         if graph is None: graph=self.g
-        graph/=abs(graph).max()
+        graph=graph/abs(graph).max()
         if weightedge:
             graph=graph.tocsr()
             graph[graph.nonzero()]=np.exp(-.5*abs(graph[graph.nonzero()].getA()/self.l)**self.s)
