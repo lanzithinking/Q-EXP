@@ -23,30 +23,41 @@ cd ~/Projects/qEP/code/linv
 
 # run python script
 if [ $# -eq 0 ]; then
+	alg_NO=0
 	seed_NO=2022
 	mdl_NO=0
 	ker_NO=1
 	q=1
 elif [ $# -eq 1 ]; then
-	seed_NO="$1"
+	alg_NO="$1"
+	seed_NO=2022
 	mdl_NO=0
 	ker_NO=1
 	q=1
 elif [ $# -eq 2 ]; then
-	seed_NO="$1"
-	mdl_NO="$2"
+	alg_NO="$1"
+	seed_NO="$2"
+	mdl_NO=0
 	ker_NO=1
 	q=1
 elif [ $# -eq 3 ]; then
-	seed_NO="$1"
-	mdl_NO="$2"
-	ker_NO="$3"
+	alg_NO="$1"
+	seed_NO="$2"
+	mdl_NO="$3"
+	ker_NO=1
 	q=1
 elif [ $# -eq 4 ]; then
-	seed_NO="$1"
-	mdl_NO="$2"
-	ker_NO="$3"
-	q="$4"
+	alg_NO="$1"
+	seed_NO="$2"
+	mdl_NO="$3"
+	ker_NO="$4"
+	q=1
+elif [ $# -eq 5 ]; then
+	alg_NO="$1"
+	seed_NO="$2"
+	mdl_NO="$3"
+	ker_NO="$4"
+	q="$5"
 fi
 
 if [ ${mdl_NO} -eq 0 ]; then
@@ -71,5 +82,5 @@ else
 	exit 0
 fi
 
-python -u run_linv_ESS.py ${seed_NO} ${mdl_NO} ${ker_NO} ${q} #> ${alg_name}_J${q}.log
-# sbatch --job-name=${mdl_name}-${seed_NO} --output=ESS-${mdl_name}-${seed_NO}.log run_ESS.sh
+python -u run_linv_wgeoinfMC.py ${alg_NO} ${seed_NO} ${mdl_NO} ${ker_NO} ${q} #> ${alg_name}_J${q}.log
+# sbatch --job-name=${alg_NO}-${mdl_name}-${seed_NO} --output=${alg_NO}-${mdl_name}-${seed_NO}.log run_wgeoinfMC.sh

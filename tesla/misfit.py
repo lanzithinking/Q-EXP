@@ -7,7 +7,7 @@ Created October 4, 2022 for project of q-exponential process prior (Q-EXP)
 __author__ = "Shuyi Li"
 __copyright__ = "Copyright 2022, The Q-EXP project"
 __license__ = "GPL"
-__version__ = "0.3"
+__version__ = "0.4"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@outlook.com"
 
@@ -113,14 +113,25 @@ class misfit(object):
         g = dif_obs/self.nzvar
         return g
     
-    def plot_data(self):
+    def Hess(self, u=None):
+        """
+        Compute the Hessian action of misfit
+        """
+        def hess(v):
+            if v.ndim==1 or v.shape[0]!=self.size: v=v.reshape((self.size,-1))
+            dif_obs = v
+            Hv = dif_obs/(self.nzvar if self.nzvar.size==1 else self.nzvar[:,None])
+            return Hv.squeeze()
+        return hess
+    
+    def plot_data(self, dat=None, save_plt=False, save_path='./reconstruction', **kwargs):
         """
         Plot the data information.
         """
+        if dat is None: dat = self.obs
         import matplotlib.pyplot as plt
-        
+        # plt.set_cmap(kwargs.pop('cmap','Greys'))
         fig, ax = plt.subplots(figsize=(12, 5))
-        #plt.set_cmap('Greys')
         days = self.times
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
         ax.xaxis.set_major_locator(mdates.AutoDateLocator())
@@ -128,6 +139,10 @@ class misfit(object):
         # ax.scatter(days, self.obs, color='orange', s=15)
         plt.gcf().autofmt_xdate()
         # plt.show()
+        if save_plt:
+            if not os.path.exists(save_path): os.makedirs(save_path)
+            save_fname = kwargs.pop('save_fname','Tesla_stocks')+'.png'
+            plt.savefig(save_path+'/'+save_fname,bbox_inches='tight')
         return fig
     
 if __name__ == '__main__':
@@ -140,16 +155,17 @@ if __name__ == '__main__':
     u = msft.obs
     nll=msft.cost(u)
     grad=msft.grad(u)
+    hess=msft.Hess(u)
     v = np.random.randn(*u.shape)
     h=1e-6
     gradv_fd=(msft.cost(u+h*v)-nll)/h
     gradv=grad.dot(v.flatten())
     rdiff_gradv=np.abs(gradv_fd-gradv)/np.linalg.norm(u)
     print('Relative difference of gradients in a direction between direct calculation and finite difference: %.10f' % rdiff_gradv)
+    hessv_fd=(msft.grad(u+h*v)-grad)/h
+    hessv=hess(v)
+    rdiff_hessv=np.linalg.norm(hessv_fd-hessv)/np.linalg.norm(v)
+    print('Relative difference of Hessian-action in a direction between direct calculation and finite difference: %.10f' % rdiff_hessv)
     # plot
-    fig=msft.plot_data()
-    # fig.tight_layout()
-    savepath='./properties'
-    if not os.path.exists(savepath): os.makedirs(savepath)
-    fig.savefig(os.path.join(savepath,'data_obs.png'),bbox_inches='tight')
+    fig=msft.plot_data(save_plt=True, save_path='./properties', save_fname='data_obs.png')
     # plt.show()

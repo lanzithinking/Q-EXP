@@ -1,272 +1,141 @@
-# Copyright (c) 2016-2018, The University of Texas at Austin 
-# & University of California--Merced.
-# Copyright (c) 2019-2020, The University of Texas at Austin 
-# University of California--Merced, Washington University in St. Louis.
-#
-# All Rights reserved.
-# See file COPYRIGHT for details.
-#
-# This file is part of the hIPPYlib library. For more information and source code
-# availability see https://hippylib.github.io.
-#
-# hIPPYlib is free software; you can redistribute it and/or modify it under the
-# terms of the GNU General Public License (as published by the Free
-# Software Foundation) version 2.0 dated June 1991.
+#!/usr/bin/env python
+"""
+Linear Algebra
+-- some functions written for convenience in STGP models
+--------------------------------------------------------
+Shiwei Lan @ ASU, 2019
+-------------------------------
+Created November 23, 2018
+-------------------------------
+https://bitbucket.org/lanzithinking/tesd_egwas
+"""
+__author__ = "Shiwei Lan"
+__copyright__ = "Copyright 2019, TESD project"
+__credits__ = ""
+__license__ = "GPL"
+__version__ = "0.4"
+__maintainer__ = "Shiwei Lan"
+__email__ = "shiwei@illinois.edu; lanzithinking@gmail.com; slan@asu.edu"
 
-import dolfin as df
-from petsc4py import PETSc
-
-# from ..utils.random import parRandom
 import numpy as np
+import scipy as sp
+import scipy.linalg as spla
+import scipy.sparse as sps
+import scipy.sparse.linalg as spsla
+# import scipy.spatial.distance as spsd
+# try:
+#     from mpi4py import MPI
+# except ImportError:
+#     print('mpi4py not installed! It may run slowly...')
+#     pass
 
-def amg_method(amg_type="ml_amg"):
-    """
-    Determine which AMG preconditioner to use.
-    If available use the preconditioner suggested by the user (ML is default).
-    If not available use  petsc_amg.
-    """
-    for pp in df.krylov_solver_preconditioners():
-        if pp[0] == amg_type:
-            return amg_type
-        
-    return 'petsc_amg'
+# set to warn only once for the same warnings
+import warnings
+warnings.simplefilter('ignore')
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-def MatMatMult(A,B):
+def multf(a,b,transp=False):
     """
-    Compute the matrix-matrix product :math:`AB`.
+    matrix multiplication function a*b with a being a (square) matrix, b being a vector, matrix or 3d array
+    'transp' indicates whether b is transposed already; returning result is in the same layout as b
     """
-    Amat = df.as_backend_type(A).mat()
-    Bmat = df.as_backend_type(B).mat()
-    out = Amat.matMult(Bmat)
-    rmap, _ = Amat.getLGMap()
-    _, cmap = Bmat.getLGMap()
-    out.setLGMap(rmap, cmap)
-    return df.Matrix(df.PETScMatrix(out))
-
-def MatPtAP(A,P):
-    """
-    Compute the triple matrix product :math:`P^T A P`.
-    """
-    Amat = df.as_backend_type(A).mat()
-    Pmat = df.as_backend_type(P).mat()
-    out = Amat.PtAP(Pmat, fill=1.0)
-    _, out_map = Pmat.getLGMap()
-    out.setLGMap(out_map, out_map)
-    return df.Matrix(df.PETScMatrix(out))
-
-def MatAtB(A,B):
-    """
-    Compute the matrix-matrix product :math:`A^T B`.
-    """
-    Amat = df.as_backend_type(A).mat()
-    Bmat = df.as_backend_type(B).mat()
-    out = Amat.transposeMatMult(Bmat)
-    _, rmap = Amat.getLGMap()
-    _, cmap = Bmat.getLGMap()
-    out.setLGMap(rmap, cmap)
-    return df.Matrix(df.PETScMatrix(out))
-
-def Transpose(A):
-    """
-    Compute the matrix transpose
-    """
-    Amat = df.as_backend_type(A).mat()
-    AT = PETSc.Mat()
-    Amat.transpose(AT)
-    rmap, cmap = Amat.getLGMap()
-    AT.setLGMap(cmap, rmap)
-    return df.Matrix( df.PETScMatrix(AT) )
-
-def SetToOwnedGid(v, gid, val):
-    v[gid] = val
-
-    
-def GetFromOwnedGid(v, gid):
-    return v[gid]
-    
-
-def to_dense(A, mpi_comm = df.MPI.comm_world ):
-    """
-    Convert a sparse matrix A to dense.
-    For debugging only.
-    """
-    v = df.Vector(mpi_comm)
-    A.init_vector(v)
-    nprocs = df.MPI.size(mpi_comm)
-    
-    if nprocs > 1:
-        raise Exception("to_dense is only serial")
-    
-    if hasattr(A, "getrow"):
-        n  = A.size(0)
-        m  = A.size(1)
-        B = np.zeros( (n,m), dtype=np.float64)
-        for i in range(0,n):
-            [j, val] = A.getrow(i)
-            B[i,j] = val
-        
-        return B
+    if np.ndim(b)<=2: # optional
+        c=b.dot(a.T) if transp else a.dot(b)
+    elif np.ndim(b)==3: # np.matmul(a,b)
+        c=a.dot(b).swapaxes(0,1) if transp else np.tensordot(a,b,1)
     else:
-        x = df.Vector(mpi_comm)
-        Ax = df.Vector(mpi_comm)
-        A.init_vector(x,1)
-        A.init_vector(Ax,0)
-        
-        n = Ax.get_local().shape[0]
-        m = x.get_local().shape[0]
-        B = np.zeros( (n,m), dtype=np.float64) 
-        for i in range(0,m):
-            i_ind = np.array([i], dtype=np.intc)
-            x.set_local(np.ones(i_ind.shape), i_ind)
-            x.apply("sum_values")
-            A.mult(x,Ax)
-            B[:,i] = Ax.get_local()
-            x.set_local(np.zeros(i_ind.shape), i_ind)
-            x.apply("sum_values")
-            
-        return B
-
-
-def trace(A, mpi_comm = df.MPI.comm_world ):
-    """
-    Compute the trace of a sparse matrix :math:`A`.
-    """
-    v = df.Vector(mpi_comm)
-    A.init_vector(v)
-    nprocs = df.MPI.size(mpi_comm)
+        raise Exception('Wrong dimension of b!')
+    return c
     
-    if nprocs > 1:
-        raise Exception("trace is only serial")
-    
-    n  = A.size(0)
-    tr = 0.
-    for i in range(0,n):
-        [j, val] = A.getrow(i)
-        tr += val[j == i]
-    return tr
-
-def get_diagonal(A, d):
+def mdivf(a,b,transp=False):
     """
-    Compute the diagonal of the square operator :math:`A`.
-    Use :code:`Solver2Operator` if :math:`A^{-1}` is needed.
+    matrix division (multiply by inverse) function a*b^(-1) with a being a (square) matrix, b being a vector, matrix or 3d array
+    'transp' indicates whether b is transposed already; returning result is in the same layout as b
     """
-    ej, xj = df.Vector(d.mpi_comm()), df.Vector(d.mpi_comm())
-    A.init_vector(ej,1)
-    A.init_vector(xj,0)
-                    
-    g_size = ej.size()    
-    d.zero()
-    for gid in range(g_size):
-        owns_gid = ej.owns_index(gid)
-        if owns_gid:
-            SetToOwnedGid(ej, gid, 1.)
-        ej.apply("insert")
-        A.mult(ej,xj)
-        if owns_gid:
-            val = GetFromOwnedGid(xj, gid)
-            SetToOwnedGid(d, gid, val)
-            SetToOwnedGid(ej, gid, 0.)
-        ej.apply("insert")
-        
-    d.apply("insert")
-
-    
-
-def estimate_diagonal_inv2(Asolver, k, d, init_vector = None):
-    """
-    An unbiased stochastic estimator for the diagonal of :math:`A^{-1}`.
-    :math:`d = [ \sum_{j=1}^k v_j .* A^{-1} v_j ] ./ [ \sum_{j=1}^k v_j .* v_j ]`
-    where
-
-    - :math:`v_j` are i.i.d. :math:`\mathcal{N}(0, I)`
-    - :math:`.*` and :math:`./` represent the element-wise multiplication and division
-      of vectors, respectively.
-      
-    Reference:
-        `Costas Bekas, Effrosyni Kokiopoulou, and Yousef Saad, 
-        An estimator for the diagonal of a matrix, 
-        Applied Numerical Mathematics, 57 (2007), pp. 1214-1229.`
-    """
-    x, b = df.Vector(d.mpi_comm()), df.Vector(d.mpi_comm())
-    
-    if init_vector:
-        init_vector(x,1)
-        init_vector(b,0)
+    solver=spsla.spsolve if sps.issparse(a) else lambda a,b: spla.solve(a,b,assume_a='sym' if np.allclose(a,a.T) else 'gen')
+    if transp:
+        if np.ndim(b)<=2: # optional
+            c=solver(a,b.T).T
+        elif np.ndim(b)==3:
+            c=solver(a,b.swapaxes(0,1)).swapaxes(0,1)
+        else:
+            raise Exception('Wrong dimension of b!')
     else:
-        if hasattr(Asolver, "init_vector"):
-            Asolver.init_vector(x,1)
-            Asolver.init_vector(b,0)
-        else:       
-            Asolver.get_operator().init_vector(x,1)
-            Asolver.get_operator().init_vector(b,0)
-        
-    d.zero()
-    for i in range(k):
-        x.zero()
-#         parRandom.normal(1., b)
-        b.set_local(np.random.normal(size=b.size())) # serial hack
-        Asolver.solve(x,b)
-        x *= b
-        d.axpy(1./float(k), x)
-        
-class DiagonalOperator:
-    def __init__(self, d):
-        self.d = d
-        
-    def init_vector(self,x,dim):
-        x.init(self.d.local_range())
-        
-    def mult(self,x,y):
-        tmp = self.d*x
-        y.zero()
-        y.axpy(1., x)
-        
-    def inner(self,x,y):
-        tmp = self.d*y
-        return x.inner(tmp)
+        c=solver(a,b)
+    return c
     
-class Solver2Operator:
-    def __init__(self,S,mpi_comm=df.MPI.comm_world, init_vector = None):
-        self.S = S
-        self.tmp = df.Vector(mpi_comm)
-        self.my_init_vector = init_vector
-        
-        if self.my_init_vector is None:
-            if hasattr(self.S, "init_vector"):
-                self.my_init_vector = self.S.init_vector
-            elif hasattr(self.S, "operator"):
-                self.my_init_vector = self.S.operator().init_vector
-            elif hasattr(self.S, "get_operator"):
-                self.my_init_vector = self.S.get_operator().init_vector
-        
-    def init_vector(self, x, dim):
-        if self.my_init_vector:
-            self.my_init_vector(x,dim)
-        else:
-            raise NotImplementedError("Solver2Operator.init_vector")
-        
-        
-    def mult(self,x,y):
-        self.S.solve(y,x)
-        
-    def inner(self, x, y):
-        self.S.solve(self.tmp,y)
-        return self.tmp.inner(x)
+def itsol(a,b,solver='cg',transp=False,comm=None,**kwargs):
+    """
+    iterative solver for multiple rhs
+    """
+    nd_b=np.ndim(b)
+    if nd_b==1: b=b[:,np.newaxis]
+    if transp: b=b.T
+    solve=getattr(spsla,solver)
+    maxiter=kwargs.get('maxiter',None)
+    tol=kwargs.get('tol',1e-5)
+    prun=comm is not None and nd_b>1
+    if prun:
+        try:
+#             import pydevd; pydevd.settrace()
+            b_loc=np.empty(b.shape[0],dtype=np.double)
+            comm.Scatterv([b.T,MPI.DOUBLE],[b_loc,MPI.DOUBLE],root=0)
+            c_loc=solve(a,b_loc,maxiter=maxiter,tol=tol)[0]
+            c=np.zeros_like(b)
+            comm.Gatherv([c_loc,MPI.DOUBLE],[c,MPI.DOUBLE],root=0)
+        except Exception as e:
+            if comm.rank==0:
+                print('Parallel run failed: '+str(e))
+            prun=False
+    if not prun:
+        c=np.array([solve(a,b[:,j],maxiter=maxiter,tol=tol)[0] for j in np.arange(b.shape[1])])
+    if transp==prun: c=c.T
+    return c
     
-class Operator2Solver:
-    def __init__(self,op, mpi_comm=df.MPI.comm_world):
-        self.op = op
-        self.tmp = df.Vector(mpi_comm)
-        
-    def init_vector(self, x, dim):
-        if hasattr(self.op, "init_vector"):
-            self.op.init_vector(x,dim)
+def matnrnd(M=None,U=1,V=1,n=1):
+    """
+    random sample from a matrix Normal distribution X ~ N_{I*J}(M,U,V)
+    Z~N(0,I,I), U=L_U*L_U', V=R_V'*R_V, X = M + L_U * Z * R_V
+    """
+    I=U.shape[0]
+    J=V.shape[0]
+    K=M.shape[2] if M is not None and np.ndim(M)==3 else 1
+    if M is not None:
+        assert np.allclose([I,J],M.shape[:2]), 'Sizes not matched!'
+    
+    if not np.allclose(U,np.tril(U)):
+        U=spla.cholesky(U,lower=True)
+    if not np.allclose(V,np.triu(V)):
+        V=spla.cholesky(V)
+    X=np.random.randn(I,J,n)
+    X=np.tensordot(np.tensordot(U,X,1),V,axes=(1,0)).swapaxes(1,2)
+    if n==1: X=np.squeeze(X,2)
+    if M is not None:
+        if K==1:
+            X+=M
         else:
-            raise
-        
-    def solve(self,y,x):
-        self.op.mult(x,y)
-        
-    def inner(self, x, y):
-        self.op.mult(y,self.tmp)
-        return self.tmp.inner(x)
+            X+=M[:,:,np.resize(np.arange(K),n)]
+    return X
+    
+def sparse_cholesky(A,**kwargs):
+    """
+    Cholesky decomposition for sparse matrix: the input matrix A must be a sparse symmetric positive semi-definite
+    input: sparse symmetric positive-definite matrix A
+    output: lower triangular factor L and pivot matrix P such that PLL^TP^T=A
+    """
+    n=A.shape[0]
+    lu=spsla.splu(A,**kwargs)
+    if ( lu.perm_r == lu.perm_c ).all() and ( lu.U.diagonal() >= 0 ).all(): # check the matrix A is positive semi-definite.
+        L=lu.L.dot( sps.diags(lu.U.diagonal()**0.5) )
+        P=sps.csc_matrix((np.ones(n),(np.arange(n),lu.perm_r)),shape=(n,)*2)
+        return L,P
+    else:
+        raise Exception('The matrix is not positive semi-definite!')
+    
+def sparse_ldet(A,**kwargs):
+    """
+    log-determinant of sparse matrix
+    """
+    lu=spsla.splu(A,**kwargs)
+    ldet=np.sum(np.log(abs(np.hstack([lu.L.diagonal(),lu.U.diagonal()]))))
+    return ldet

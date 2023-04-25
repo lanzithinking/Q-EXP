@@ -7,7 +7,7 @@ Created October 4, 2022 for project of q-exponential process prior (Q-EXP)
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The Q-EXP project"
 __license__ = "GPL"
-__version__ = "0.1"
+__version__ = "0.2"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@outlook.com"
 
@@ -96,45 +96,65 @@ class misfit(object):
         g = dif_obs/self.nzvar
         return g
     
-    def plot_data(self):
+    def Hess(self, u=None):
+        """
+        Compute the Hessian action of misfit
+        """
+        def hess(v):
+            if v.ndim==1 or v.shape[0]!=self.size: v=v.reshape((self.size,-1))
+            dif_obs = v
+            Hv = dif_obs/(self.nzvar if self.nzvar.size==1 else self.nzvar[:,None])
+            return Hv.squeeze()
+        return hess
+    
+    def plot_data(self, dat=None, save_plt=False, save_path='./reconstruction', **kwargs):
         """
         Plot the data information.
         """
+        truths = kwargs.pop('truths', {0:self._truef(0)(self.times),1:self._truef(1)(self.times)})
+        scatpts = kwargs.pop('scatpts', {0:self.get_obs(opt=0)[0],1:self.get_obs(opt=1)[0]})
+        titles = kwargs.pop('titles', {0:'step',1:'turning'})
+        n_dat = len(truths)
         import matplotlib.pyplot as plt
-        plt.set_cmap('Greys')
+        plt.set_cmap(kwargs.pop('cmap','Greys'))
         # from util import matplot4dolfin
         # matplot=matplot4dolfin()
-        fig, axes = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(12, 5))
+        fig, axes = plt.subplots(1, n_dat, sharex=True, sharey=True, figsize=(n_dat*5, 5))
         for i,ax in enumerate(axes.flat):
-            f_i = self._truef(opt=i)
             plt.axes(ax)
-            plt.plot(self.times, f_i(self.times), linewidth=2)
-            plt.scatter(self.times, self.get_obs(opt=i)[0], color='orange')
-            ax.set_title({0:'step',1:'turning'}[i]+' function',fontsize=16)
+            ax.plot(self.times, truths[i], linewidth=2)
+            if dat is not None: ax.plot(self.times, dat[i], **kwargs)
+            ax.scatter(self.times, scatpts[i], color='orange')
+            ax.set_title(titles[i],fontsize=16)
             ax.set_aspect('auto')
         plt.subplots_adjust(wspace=0.1, hspace=0.1)
+        if save_plt:
+            if not os.path.exists(save_path): os.makedirs(save_path)
+            save_fname = kwargs.pop('save_fname','-'.join(list(titles.values())))+'.png'
+            plt.savefig(save_path+'/'+save_fname,bbox_inches='tight')
         return fig
     
 if __name__ == '__main__':
     np.random.seed(2022)
     # define the misfit
     msft = misfit(truth_option=0, size=200)
-    msft = misfit(truth_option=1, size=200)
+    # msft = misfit(truth_option=1, size=200)
     # test
     u = msft.truth
     nll=msft.cost(u)
     grad=msft.grad(u)
+    hess=msft.Hess(u)
     v = np.random.randn(*u.shape)
     h=1e-6
     gradv_fd=(msft.cost(u+h*v)-nll)/h
     gradv=grad.dot(v.flatten())
     rdiff_gradv=np.abs(gradv_fd-gradv)/np.linalg.norm(u)
     print('Relative difference of gradients in a direction between direct calculation and finite difference: %.10f' % rdiff_gradv)
+    hessv_fd=(msft.grad(u+h*v)-grad)/h
+    hessv=hess(v)
+    rdiff_hessv=np.linalg.norm(hessv_fd-hessv)/np.linalg.norm(v)
+    print('Relative difference of Hessian-action in a direction between direct calculation and finite difference: %.10f' % rdiff_hessv)
     # plot
     import matplotlib.pyplot as plt
-    fig=msft.plot_data()
-    # fig.tight_layout()
-    savepath='./properties'
-    if not os.path.exists(savepath): os.makedirs(savepath)
-    fig.savefig(os.path.join(savepath,'truth_obs.png'),bbox_inches='tight')
+    fig=msft.plot_data(save_plt=True, save_path='./properties', save_fname='truth_obs.png')
     # plt.show()

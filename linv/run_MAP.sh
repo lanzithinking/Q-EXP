@@ -26,18 +26,38 @@ if [ $# -eq 0 ]; then
 	mdl_NO=0
 	ker_NO=1
 	q=1
+	whiten=0
+	NCG=0
 elif [ $# -eq 1 ]; then
 	mdl_NO="$1"
 	ker_NO=1
 	q=1
+	whiten=0
+	NCG=0
 elif [ $# -eq 2 ]; then
 	mdl_NO="$1"
 	ker_NO="$2"
 	q=1
+	whiten=0
+	NCG=0
 elif [ $# -eq 3 ]; then
 	mdl_NO="$1"
 	ker_NO="$2"
 	q="$3"
+	whiten=0
+	NCG=0
+elif [ $# -eq 4 ]; then
+	mdl_NO="$1"
+	ker_NO="$2"
+	q="$3"
+	whiten="$4"
+	NCG=0
+elif [ $# -eq 5 ]; then
+	mdl_NO="$1"
+	ker_NO="$2"
+	q="$3"
+	whiten="$4"
+	NCG="$5"
 fi
 
 if [ ${mdl_NO} -eq 0 ]; then
@@ -62,5 +82,5 @@ else
 	exit 0
 fi
 
-python -u run_linv_MAP.py ${mdl_NO} ${ker_NO} ${q}
+python -u run_linv_MAP.py ${mdl_NO} ${ker_NO} ${q} ${whiten} ${NCG}
 # sbatch --job-name=${mdl_name}-${ker_name} --output=MAP-${mdl_name}-${ker_name}.log run_MAP.sh

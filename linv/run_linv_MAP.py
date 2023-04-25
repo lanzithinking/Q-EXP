@@ -13,19 +13,16 @@ import timeit,time
 # the inverse problem
 from Linv import Linv
 
-# MCMC
-import sys
-sys.path.append( "../" )
-from sampler.ESS import ESS
-
 np.set_printoptions(precision=3, suppress=True)
 # np.random.seed(2022)
 
 def main(seed=2022):
     parser = argparse.ArgumentParser()
     parser.add_argument('mdl_NO', nargs='?', type=int, default=2)
-    parser.add_argument('ker_NO', nargs='?', type=int, default=1)
+    parser.add_argument('ker_NO', nargs='?', type=int, default=2)
     parser.add_argument('q', nargs='?', type=int, default=1)
+    parser.add_argument('whiten', nargs='?', type=int, default=0) # choose to optimize in white noise representation space
+    parser.add_argument('NCG', nargs='?', type=int, default=0) # choose to optimize with Newton conjugate gradient method
     parser.add_argument('mdls', nargs='?', type=str, default=('gp','bsv','qep'))
     parser.add_argument('kers', nargs='?', type=str, default=('covf','serexp','graphL'))
     args = parser.parse_args()
@@ -35,8 +32,8 @@ def main(seed=2022):
     
     ## define the linear inverse problem ##
     prior_params={'prior_option':args.mdls[args.mdl_NO],
-                  # 'ker_opt':'serexp' if args.mdls[args.mdl_NO]=='bsv' else args.kers[args.ker_NO],
-                  'ker_opt':{'gp':'graphL','bsv':'serexp','qep':args.kers[args.ker_NO]}[args.mdls[args.mdl_NO]],
+                  'ker_opt':'serexp' if args.mdls[args.mdl_NO]=='bsv' else args.kers[args.ker_NO],
+                  # 'ker_opt':{'gp':'graphL','bsv':'serexp','qep':args.kers[args.ker_NO]}[args.mdls[args.mdl_NO]],
                   'basis_opt':'Fourier', # serexp param
                   'KL_trunc':2000,
                   'space':'fun' if args.kers[args.ker_NO]=='graphL' else 'vec',
@@ -50,13 +47,32 @@ def main(seed=2022):
     linv = Linv(**prior_params,**lik_params,seed=seed)
     truth = linv.misfit.truth
     
-    # run MCMC to generate samples
-    print("Obtaining MAP estimate for %s prior model with %s kernel ..." % ({0:'Gaussian',1:'Besov',2:'q-Exponential'}[args.mdl_NO], args.kers[args.ker_NO]))
+    # optimze
+    print("Obtaining MAP estimate for %s prior model with %s kernel %s ..." % ({0:'Gaussian',1:'Besov',2:'q-Exponential'}[args.mdl_NO], args.kers[args.ker_NO], {True:'using Newton CG',False:''}[args.NCG]))
     
-    param0 = linv.misfit.obs.flatten()
-    if linv.prior.space=='vec': param0=linv.prior.fun2vec(param0)
-    fun = lambda parameter: linv._get_misfit(parameter, MF_only=False, incldet=False)
-    grad = lambda parameter: linv._get_grad(parameter, MF_only=False)
+    if not hasattr(linv,'init_parameter'): linv._init_param()#init_opt='LSE',lmda=.1)
+    param0 = linv.init_parameter
+    if args.whiten: param0 = linv.whiten.qep2wn(param0).flatten(order='F')
+    fun = lambda parameter: linv._get_misfit(linv.whiten.wn2qep(parameter) if args.whiten else parameter, MF_only=False, incldet=False)
+    def grad(parameter):
+        param = linv.whiten.wn2qep(parameter) if args.whiten else parameter
+        g = linv._get_grad(param, MF_only=False)
+        if args.whiten: g = linv.whiten.wn2qep(parameter, 1)(g, adj=True)
+        return g.squeeze()
+    def hessp(parameter,v):
+        param = linv.whiten.wn2qep(parameter) if args.whiten else parameter
+        Hv = linv._get_HessApply(param, MF_only=False)(linv.whiten.wn2qep(parameter,1)(v) if args.whiten else v)
+        if args.whiten:
+            Hv = linv.whiten.wn2qep(parameter, 1)(Hv, adj=True) 
+            Hv+= linv.whiten.wn2qep(parameter, 2)(v, linv._get_grad(param, MF_only=False), adj=True)
+        return Hv.squeeze()
+    # h=1e-7; v=linv.whiten.sample() if args.whiten else linv.prior.sample()
+    # # if args.whiten: v=linv.whiten.qep2wn(v).flatten(order='F')
+    # f,g,Hv=fun(param0),grad(param0),hessp(param0,v)
+    # f1,g1=fun(param0+h*v),grad(param0+h*v)
+    # print('error in gradient: %0.8f' %(abs((f1-f)/h-g.dot(v))/np.linalg.norm(v)))
+    # print('error in Hessian: %0.8f' %(np.linalg.norm((g1-g)/h-Hv)/np.linalg.norm(v)))
+    
     global Nfeval,FUN,ERR
     Nfeval=1; FUN=[]; ERR=[];
     def call_back(Xi):
@@ -65,11 +81,15 @@ def main(seed=2022):
         print('{0:4d}   {1: 3.6f}   {2: 3.6f}   {3: 3.6f}   {4: 3.6f}'.format(Nfeval, Xi[0], Xi[1], Xi[2], fval))
         Nfeval += 1
         FUN.append(fval)
-        ERR.append(np.linalg.norm((linv.prior.vec2fun(Xi) if linv.prior.space=='vec' else Xi) -truth.flatten())/np.linalg.norm(truth))
+        Xi_=linv.whiten.wn2qep(Xi) if args.whiten else Xi
+        ERR.append(np.linalg.norm((linv.prior.vec2fun(Xi_) if linv.prior.space=='vec' else Xi_) -truth.flatten())/np.linalg.norm(truth))
     print('{0:4s}   {1:9s}   {2:9s}   {3:9s}   {4:9s}'.format('Iter', ' X1', ' X2', ' X3', 'f(X)'))
     # solve for MAP
     start = time.time()
-    res = optimize.minimize(fun, param0, method='L-BFGS-B' if args.kers[args.ker_NO]=='graphL' else 'BFGS', jac=grad, callback=call_back, options={'maxiter':1000,'disp':True})
+    if args.NCG:
+        res = optimize.minimize(fun, param0, method='trust-ncg', jac=grad, hessp=hessp, callback=call_back, options={'maxiter':100,'disp':True})
+    else:
+        res = optimize.minimize(fun, param0, method='L-BFGS-B' if args.kers[args.ker_NO]=='graphL' else 'BFGS', jac=grad, callback=call_back, options={'maxiter':1000,'disp':True})
     end = time.time()
     print('\nTime used is %.4f' % (end-start))
     # print out info
@@ -79,17 +99,23 @@ def main(seed=2022):
         print('\nNot Converged.')
     print('Final function value: %.4f.\n' % res.fun)
     
-    
     # store the results
-    MAP=linv.prior.vec2fun(res.x) if linv.prior.space=='vec' else res.x; funs=np.stack(FUN); errs=np.stack(ERR)
+    map_v=linv.whiten.wn2qep(res.x) if args.whiten else res.x
+    map_f=linv.prior.vec2fun(map_v) if linv.prior.space=='vec' else map_v; funs=np.stack(FUN); errs=np.stack(ERR)
+    print('Relative error of MAP compared with the truth %.2f%%' % (errs[-1]*100))
+    map_f=map_f.reshape(linv.misfit.size)
     # name file
     ctime=time.strftime("%Y-%m-%d-%H-%M-%S")
     savepath=os.path.join(os.getcwd(),'MAP')
     if not os.path.exists(savepath): os.makedirs(savepath)
-    filename='linv_MAP_dim'+str(len(MAP))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
+    # save
+    filename='linv_MAP_dim'+str(len(param0))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
     f=open(os.path.join(savepath,filename),'wb')
-    pickle.dump([truth, MAP.reshape(linv.misfit.size), funs, errs],f)
+    pickle.dump([prior_params, truth, map_f, funs, errs],f)
     f.close()
+    
+    # plot
+    linv.misfit.plot_data(img=map_f, save_img=True, save_path=savepath, save_fname=prior_params['prior_option']+'_'+prior_params['ker_opt']+('_whiten' if args.whiten else '')+('_NCG' if args.NCG else ''))
 
 if __name__ == '__main__':
     main()

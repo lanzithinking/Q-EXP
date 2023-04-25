@@ -1,26 +1,26 @@
 #!/usr/bin/env python
 """
-Geometric Infinite dimensional MCMC samplers
-Shiwei Lan @ U of Warwick, 2016
--------------------------------
-Created March 12, 2016
--------------------------------
-Modified Dec. 8, 2021 @ ASU
+Whitened Geometric Infinite dimensional MCMC samplers
+Shiwei Lan @ ASU, 2023
+-----------------------------------------
+Based on "Dimension-Robust MCMC samplers"
+Victor Chen, Matthew M. Dunlop, Omiros Papaspiliopoulos, Andrew M. Stuart
+https://arxiv.org/abs/1803.03344
+-----------------------------------------
 """
 __author__ = "Shiwei Lan"
-__copyright__ = "Copyright 2016, The EQUIP/EQUiPS projects"
+__copyright__ = "Copyright 2022, The STBP project"
 __license__ = "GPL"
-__version__ = "1.3"
+__version__ = "0.5"
 __maintainer__ = "Shiwei Lan"
-__email__ = "S.Lan@warwick.ac.uk; lanzithinking@outlook.com; slan@asu.edu"
+__email__ = "slan@asu.edu; lanzithinking@outlook.com"
 
 import numpy as np
 import timeit,time
-from scipy.special import gammainc
-from scipy import stats
 
-class geoinfMC:
+class wht_geoinfMC:
     """
+    Whitened version of 
     Geometric Infinite dimensional MCMC samplers by Beskos, Alexandros, Mark Girolami, Shiwei Lan, Patrick E. Farrell, and Andrew M. Stuart.
     https://www.sciencedirect.com/science/article/pii/S0021999116307033
     -------------------------------------------------------------------
@@ -30,27 +30,28 @@ class geoinfMC:
     def __init__(self,parameter_init,model,step_size,step_num,alg_name,adpt_h=False,**kwargs):
         """
         Initialization
-        self.q: parameter
-        self.model: pde/ode model
-        self.h: step_size(beta?????)
-        self.L: step_num, substeps in HMC
+        --------------
+        u: parameter to be sampled
+        dim: dimension of the parameter
+        model: an object with properties including misfit (negative loglikelihood), prior and posterior (Gaussian approximation)
+        T: a transformation that maps white noise to the (non-Gaussian) prior distribution
+        geom: the method that outputs geometric quantities including log-likelihood(posterior), gradient, Hessian and its eigenvalues
+        geomT: geom o T
         """
         # parameters
-        self.q=parameter_init
-        self.dim=np.size(self.q)
+        self.u=parameter_init
+        self.dim=self.u.size
         self.model=model
-        qpower = self.model.prior.q
-        self.z = lambda x: 2*stats.norm.cdf(abs(x))-1
-        self.T = lambda x: 2**(1/qpower)*np.sign(x)*((gammainc(1/qpower,self.z(x)))**-1)**(1/qpower)
-        
+        self.T=kwargs.pop('transformation',None)
         
         target_acpt=kwargs.pop('target_acpt',0.65)
         # geometry needed
         geom_ord=[0]
         if any(s in alg_name for s in ['MALA','HMC']): geom_ord.append(1)
         if any(s in alg_name for s in ['mMALA','mHMC']): geom_ord.append(2)
-        self.geom=lambda parameter: model.get_geom(parameter,geom_ord=geom_ord,**kwargs)
-        self.ll,self.g,_,self.eigs=self.geom(self.T(self.q))
+        geomf=kwargs.pop('geomT',None) if 'geomT' in kwargs else getattr(model,'get_geom')
+        self.geom=lambda parameter: geomf(parameter,geom_ord=geom_ord,**kwargs)
+        self.ll,self.g,_,self.eigs=self.geom(self.u)
 
         # sampling setting
         self.h=step_size
@@ -73,69 +74,42 @@ class geoinfMC:
             h_adpt['a0']=target_acpt
             self.h_adpt=h_adpt
     
-    def randv(self,post_Ga=None):
+    def randv(self):
         """
-        sample v ~ N(0,C) or N(0,invK(q))
+        sample v ~ N(0,I) or N(0,invK(q))
         """
-        if post_Ga is None:
-            v = self.model.prior.sample()
+        # v = np.random.randn(self.dim)
+        if any(s in self.alg_name for s in ['mMALA','mHMC']) and hasattr(self.model, 'posterior'):
+            # v = self.model.posterior.K_act(v, 0.5)
+            v = self.model.posterior.sample()
+        elif hasattr(self.model, 'whiten'):
+            v = self.model.whiten.sample()
         else:
-            v = self.model.post_Ga.sample()
+            v = np.random.randn(self.dim)
         return v
         
-    def pCN(self):
+    def wpCN(self):
         """
-        preconditioned Crank-Nicolson
+        Whitened preconditioned Crank-Nicolson
         """
         # initialization
-        q=self.q.copy()
+        u=self.u.copy()
         
         # sample velocity
         v=self.randv()
 
         # generate proposal according to Crank-Nicolson scheme
-        q = ((1-self.h/4)*self.q + np.sqrt(self.h)*v)/(1+self.h/4)
+        u = ((1-self.h/4)*self.u + np.sqrt(self.h)*v)/(1+self.h/4)
 
         # update geometry
-        ll=self.geom(q)[0]
+        ll=self.geom(u)[0]
 
         # Metropolis test
         logr=ll-self.ll
 
         if np.isfinite(logr) and np.log(np.random.uniform())<min(0,logr):
             # accept
-            self.q=q; self.ll=ll;
-            acpt=True
-        else:
-            acpt=False
-
-        # return accept indicator
-        return acpt,logr
-    
-    def wpCN(self):
-        """
-        Whitened Preconditioned Crank-Nicolson (wpCN)
-        """
-        # initialization
-        q=self.q.copy()
-        
-        # sample velocity
-        #v=self.randv()
-        
-        
-        # generate proposal according to Crank-Nicolson scheme
-        #q = ((1-self.h/4)*self.q + np.sqrt(self.h)*v)/(1+self.h/4)
-        q = (1-self.h**2)**.5*q + self.h*np.random.randn(np.prod(self.q.shape))
-        
-        # update geometry
-        ll=self.geom(self.T(q))[0]
-
-        # Metropolis test
-        logr=ll-self.ll
-
-        if np.isfinite(logr) and np.log(np.random.uniform())<min(0,logr):
-            # accept
-            self.q=q; self.ll=ll;
+            self.u=u; self.ll=ll;
             acpt=True
         else:
             acpt=False
@@ -143,47 +117,44 @@ class geoinfMC:
         # return accept indicator
         return acpt,logr
 
-    def infMALA(self):
+    def winfMALA(self):
         """
-        infinite dimensional Metropolis Adjusted Langevin Algorithm
+        Whitened infinite dimensional Metropolis Adjusted Langevin Algorithm
         """
         # initialization
-        q=self.q.copy()
+        u=self.u.copy()
         rth=np.sqrt(self.h)
         
         # sample velocity
         v=self.randv()
 
-        # natural gradient
-        ng=self.model.prior.C_act(self.g)
+        ## gradient
+        g=self.g.copy()
 
         # update velocity
-        v+=rth/2*ng
+        v+=rth/2*g
 
         # current energy
-        E_cur = -self.ll - rth/2*self.g.dot(v) + self.h/8*self.g.dot(ng)
+        E_cur = -self.ll + g.dot(-rth/2*v + self.h/8*g)
 
         # generate proposal according to Langevin dynamics
-        q = ((1-self.h/4)*self.q + rth*v)/(1+self.h/4)
+        u = ((1-self.h/4)*self.u + rth*v)/(1+self.h/4)
 
         # update velocity
-        v = (-(1-self.h/4)*v + rth*self.q)/(1+self.h/4)
+        v = (-(1-self.h/4)*v + rth*self.u)/(1+self.h/4)
 
         # update geometry
-        ll,g=self.geom(q)[:2]
-
-        # natural gradient
-        ng=self.model.prior.C_act(g)
+        ll,g=self.geom(u)[:2]
 
         # new energy
-        E_prp = -ll - rth/2*g.dot(v) + self.h/8*g.dot(ng)
+        E_prp = -ll + g.dot(-rth/2*v + self.h/8*g)
 
         # Metropolis test
         logr=-E_prp+E_cur
 
         if np.isfinite(logr) and np.log(np.random.uniform())<min(0,logr):
             # accept
-            self.q=q; self.ll=ll; self.g=g;
+            self.u=u; self.ll=ll; self.g=g;
             acpt=True
         else:
             acpt=False
@@ -191,46 +162,45 @@ class geoinfMC:
         # return accept indicator
         return acpt,logr
 
-    def infHMC(self):
+    def winfHMC(self):
         """
-        infinite dimensional Hamiltonian Monte Carlo
+        Whitened infinite dimensional Hamiltonian Monte Carlo
         """
         # initialization
-        q=self.q.copy()
+        u=self.u.copy()
         rth=np.sqrt(self.h) # make the scale comparable to MALA
         cos_=np.cos(rth); sin_=np.sin(rth);
 
         # sample velocity
         v=self.randv()
 
-        # natural gradient
-        ng=self.model.prior.C_act(self.g)
+        # gradient
+        g=self.g.copy()
 
         # accumulate the power of force
-        pw = rth/2*self.g.dot(v)
+        pw = rth/2*g.dot(v)
 
         # current energy
-        E_cur = -self.ll - self.h/8*self.g.dot(ng)
+        E_cur = -self.ll - self.h/8*g.dot(g)
 
-        randL=np.int(np.ceil(np.random.uniform(0,self.L)))
+        randL=int(np.ceil(np.random.uniform(0,self.L)))
 
         for l in range(randL):
             # a half step for velocity
-            v+=rth/2*ng
+            v+=rth/2*g
 
             # a full step for position
-            q_=q.copy()
-            q = cos_*q_ + sin_*v
-            v = -sin_*q_ + cos_*v
-#             rot=(q+1j*v)*np.exp(-1j*rth)
-#             q=rot.real; v=rot.imag
+            u_=u.copy()
+            u = cos_*u_ + sin_*v
+            v = -sin_*u_ + cos_*v
+#             rot=(u+1j*v)*np.exp(-1j*rth)
+#             u=rot.real; v=rot.imag
 
             # update geometry
-            ll,g=self.geom(q)[:2]
-            ng=self.model.prior.C_act(g)
+            ll,g=self.geom(u)[:2]
 
             # another half step for velocity
-            v+=rth/2*ng
+            v+=rth/2*g
 
             # accumulate the power of force
             if l!=randL-1: pw+=rth*g.dot(v)
@@ -239,14 +209,14 @@ class geoinfMC:
         pw += rth/2*g.dot(v)
 
         # new energy
-        E_prp = -ll - self.h/8*g.dot(ng)
+        E_prp = -ll - self.h/8*g.dot(g)
 
         # Metropolis test
         logr=-E_prp+E_cur-pw
 
         if np.isfinite(logr) and np.log(np.random.uniform())<min(0,logr):
             # accept
-            self.q=q; self.ll=ll; self.g=g;
+            self.u=u; self.ll=ll; self.g=g;
             acpt=True
         else:
             acpt=False
@@ -254,48 +224,46 @@ class geoinfMC:
         # return accept indicator
         return acpt,logr
 
-    def DRinfmMALA(self):
+    def winfmMALA(self):
         """
-        dimension-reduced infinite dimensional manifold MALA
+        Whitened infinite dimensional manifold MALA
         """
         # initialization
-        q=self.q.copy()
+        u=self.u.copy()
         rth=np.sqrt(self.h)
         
         # sample velocity
-        v=self.randv(self.model.post_Ga)
+        v=self.randv()
 
         # natural gradient
-        ng=self.model.post_Ga.postC_act(self.g) # use low-rank posterior Hessian solver
+        ng=self.model.posterior.K_act(self.g)
 
         # update velocity
         v+=rth/2*ng
 
         # current energy
-        E_cur = -self.ll - rth/2*self.g.dot(v) + self.h/8*self.g.dot(ng) +0.5*self.model.post_Ga.Hlr.norm2(v) -0.5*sum(np.log(1+self.eigs[0])) # use low-rank Hessian inner product
-
+        E_cur = -self.ll - rth/2*self.g.dot(v) + self.h/8*self.g.dot(ng) +0.5*self.model.posterior.H_act(v).dot(v) +0.5*self.model.posterior.logdet(self.eigs[0])
         # generate proposal according to simplified manifold Langevin dynamics
-        q = ((1-self.h/4)*self.q + rth*v)/(1+self.h/4)
+        u = ((1-self.h/4)*self.u + rth*v)/(1+self.h/4)
 
         # update velocity
-        v = (-(1-self.h/4)*v + rth*self.q)/(1+self.h/4)
+        v = (-(1-self.h/4)*v + rth*self.u)/(1+self.h/4)
 
         # update geometry
-        ll,g,_,eigs=self.geom(q)
-        self.model.post_Ga.eigs=eigs # update the eigen-pairs in low-rank approximation --important!
+        ll,g,_,eigs=self.geom(u)
 
         # natural gradient
-        ng=self.model.post_Ga.postC_act(g)
+        ng=self.model.posterior.K_act(g)
 
         # new energy
-        E_prp = -ll - rth/2*g.dot(v) + self.h/8*g.dot(ng) +0.5*self.model.post_Ga.Hlr.norm2(v) -0.5*sum(np.log(1+eigs[0]))
+        E_prp = -ll - rth/2*g.dot(v) + self.h/8*g.dot(ng) +0.5*self.model.posterior.H_act(v).dot(v) +0.5*self.model.posterior.logdet(eigs[0])
 
         # Metropolis test
         logr=-E_prp+E_cur
 
         if np.isfinite(logr) and np.log(np.random.uniform())<min(0,logr):
             # accept
-            self.q=q; self.ll=ll; self.g=g; self.eigs=eigs;
+            self.u=u; self.ll=ll; self.g=g; self.eigs=eigs;
             acpt=True
         else:
             acpt=False
@@ -303,64 +271,63 @@ class geoinfMC:
         # return accept indicator
         return acpt,logr
 
-    def DRinfmHMC(self):
+    def winfmHMC(self):
         """
-        dimension-reduced infinite dimensional manifold HMC
+        Whitened infinite dimensional manifold HMC
         """
         # initialization
-        q=self.q.copy()
+        u=self.u.copy()
         rth=np.sqrt(self.h) # make the scale comparable to MALA
 #         cos_=np.cos(rth); sin_=np.sin(rth);
         cos_=(1-self.h/4)/(1+self.h/4); sin_=rth/(1+self.h/4);
 
         # sample velocity
-        v=self.randv(self.model.post_Ga)
+        v=self.randv()
 
         # natural gradient
-        ng=self.model.post_Ga.postC_act(self.g) # use low-rank posterior Hessian solver
+        ng=self.model.posterior.K_act(self.g)
 
         # accumulate the power of force
-        pw = rth/2*self.model.prior.C_act(v,-1).dot(ng)
+        pw = rth/2*v.dot(ng)
 
         # current energy
-        E_cur = -self.ll + self.h/4*self.model.prior.logpdf(ng) +0.5*self.model.post_Ga.Hlr.norm2(v) -0.5*sum(np.log(1+self.eigs[0])) # use low-rank Hessian inner product
+        E_cur = -self.ll - self.h/8*ng.dot(ng) +0.5*self.model.posterior.H_act(v).dot(v) +0.5*self.model.posterior.logdet(self.eigs[0])
 
-        randL=np.int(np.ceil(np.random.uniform(0,self.L)))
+        randL=int(np.ceil(np.random.uniform(0,self.L)))
 
         for l in range(randL):
             # a half step for velocity
             v+=rth/2*ng
 
             # a full step rotation
-            q_=q.copy()
-            q = cos_*q_ + sin_*v
-            v = -sin_*q_ + cos_*v
-#             rot=(q+1j*v)*np.exp(-1j*rth)
-#             q=rot.real; v=rot.imag
+            u_=u.copy()
+            u = cos_*u_ + sin_*v
+            v = -sin_*u_ + cos_*v
+#             rot=(u+1j*v)*np.exp(-1j*rth)
+#             u=rot.real; v=rot.imag
 
             # update geometry
-            ll,g,_,eigs=self.geom(q)
-            self.model.post_Ga.eigs=eigs # update the eigen-pairs in low-rank approximation --important!
-            ng=self.model.post_Ga.postC_act(g)
+            ll,g,_,eigs=self.geom(u)
+            ng=self.model.posterior.K_act(g)
 
             # another half step for velocity
             v+=rth/2*ng
 
             # accumulate the power of force
-            if l!=randL-1: pw+=rth*self.model.prior.C_act(v,-1).dot(ng)
+            if l!=randL-1: pw+=rth*v.dot(ng)
 
         # accumulate the power of force
-        pw += rth/2*self.model.prior.C_act(v,-1).dot(ng)
+        pw += rth/2*v.dot(ng)
 
         # new energy
-        E_prp = -ll + self.h/4*self.model.prior.logpdf(ng) +0.5*self.model.post_Ga.Hlr.norm2(v) -0.5*sum(np.log(1+eigs[0]))
+        E_prp = -ll - self.h/8*ng.dot(ng) +0.5*self.model.posterior.H_act(v).dot(v) +0.5*self.model.posterior.logdet(eigs[0])
 
         # Metropolis test
         logr=-E_prp+E_cur-pw
 
         if np.isfinite(logr) and np.log(np.random.uniform())<min(0,logr):
             # accept
-            self.q=q; self.ll=ll; self.g=g; self.eigs=eigs;
+            self.u=u; self.ll=ll; self.g=g; self.eigs=eigs;
             acpt=True
         else:
             acpt=False
@@ -435,7 +402,7 @@ class geoinfMC:
             while True:
                 try:
                     acpt_idx,logr=sampler()
-                except RuntimeError as e:
+                except Exception as e:
                     print(e)
 #                     import pydevd; pydevd.settrace()
 #                     import traceback; traceback.print_exc()
@@ -467,8 +434,7 @@ class geoinfMC:
             # save results
             self.loglik[s]=self.ll
             if s>=num_burnin:
-                ###########transfrom back T(epsilon) and save
-                self.samp[s-num_burnin,]=self.T(self.q.T)
+                self.samp[s-num_burnin]=self.T(self.u) if callable(self.T) else self.u
                 self.acpt+=acpt_idx
             
             # record the time
@@ -487,18 +453,24 @@ class geoinfMC:
 
         # stop timer
         toc=timeit.default_timer()
-        self.time=toc-tic
+        self.ttime=toc-tic
         self.acpt/=num_samp
         print("\nAfter %g seconds, %d samples have been collected with the final acceptance rate %0.2f \n"
-              % (self.time,num_samp,self.acpt))
+              % (self.ttime,num_samp,self.acpt))
 
         # save to file
-        self.save_samp()
+        if kwargs.pop('save_result',True):
+            self.save_samp()
+        
+        # return result
+        if kwargs.pop('return_result',False):
+            res=[self.h,self.L,self.alg_name,self.samp,self.loglik,self.acpt,self.ttime,self.times]
+            return res
 
     # save samples
     def save_samp(self):
         import os,errno
-        import pickle
+        # import pickle
         # create folder
         cwd=os.getcwd()
         self.savepath=os.path.join(cwd,'result')
@@ -512,14 +484,17 @@ class geoinfMC:
         # name file
         ctime=time.strftime("%Y-%m-%d-%H-%M-%S")
         self.filename=self.alg_name+'_dim'+str(self.dim)+'_'+ctime
-        # dump data
-        f=open(os.path.join(self.savepath,self.filename+'.pckl'),'wb')
-        res2save=[self.h,self.L,self.alg_name,self.samp,self.loglik,self.acpt,self.time,self.times]
-        if self.adpt_h:
-            res2save.append(self.h_adpt)
-        pickle.dump(res2save,f)
-        f.close()
+        # # dump data
+        # f=open(os.path.join(self.savepath,self.filename+'.pckl'),'wb')
+        # res2save=[self.h,self.L,self.alg_name,self.samp,self.loglik,self.acpt,self.ttime,self.times]
+        # if self.adpt_h:
+        #     res2save.append(self.h_adpt)
+        # pickle.dump(res2save,f)
+        # f.close()
 #         # load data
 #         f=open(os.path.join(self.savepath,self.filename+'.pckl'),'rb')
 #         f_read=pickle.load(f)
 #         f.close()
+        np.savez_compressed(os.path.join(self.savepath,self.filename),h=self.h,L=self.L,alg_name=self.alg_name,samp=self.samp,loglik=self.loglik,acpt=self.acpt,ttime=self.ttime,times=self.times)
+        # load data
+        # loaded=np.load(os.path.join(self.savepath,self.filename+'.npz'))

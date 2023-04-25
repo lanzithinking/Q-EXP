@@ -8,13 +8,14 @@ __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The Q-EXP project"
 __credits__ = "Mirjeta Pasha"
 __license__ = "GPL"
-__version__ = "0.3"
+__version__ = "0.4"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@outlook.com"
 
 import numpy as np
 import scipy as sp
 import scipy.io as spio
+import scipy.sparse.linalg as spsla
 from scipy.ndimage import convolve
 
 import os,sys
@@ -40,7 +41,7 @@ class misfit(object):
         """
         Project the image
         """
-        if np.ndim(input)!=2: input=input.reshape(self.size)
+        if input.shape!=self.size: input=input.reshape(self.size)
         if filter is None: filter = self._filter()
         if direction=='bkd': filter = np.flipud(np.fliplr(filter)) 
         proj_img = convolve(input, weights=filter, mode=mode)
@@ -69,7 +70,7 @@ class misfit(object):
         """
         Observe image by adding noise
         """
-        if np.ndim(img)!=2: img=img.reshape(self.size)
+        if img.shape!=self.size: img=img.reshape(self.size)
         if filter is None:
             filter = self._filter()
         obs_img = self._proj(img, filter)
@@ -116,22 +117,46 @@ class misfit(object):
         g = self._proj(dif_obs,direction='bkd').flatten()/self.nzvar
         return g
     
-    def plot_data(self):
+    def Hess(self, u=None):
+        """
+        Compute the Hessian action of misfit
+        """
+        def hess(v):
+            if v.ndim==1 or v.shape[0]!=np.prod(self.size): v=v.reshape((np.prod(self.size),-1)) # cautious about multiple images: can be [n_imgs, H, W]
+            Hv = np.stack([self._proj(self._proj(v[:,k]),direction='bkd').flatten()/self.nzvar for k in range(v.shape[-1])]).T
+            return Hv.squeeze()
+        return hess
+    
+    def reconstruct_LSE(self,lmda=0.1):
+        """
+        Reconstruct images by least square estimate
+        """
+        A_op = spsla.LinearOperator(shape=(np.prod(self.size),)*2,matvec=lambda v:self._proj(v,direction='fwd').flatten(),rmatvec=lambda v:self._proj(v,direction='bkd').flatten())
+        rcstr = spsla.lsqr(A_op, b=self.obs.flatten(), damp=lmda)[0]
+        return rcstr.reshape(self.size)
+    
+    def plot_data(self, img=None, save_img=False, save_path='./reconstruction', **kwargs):
         """
         Plot the data information.
         """
+        images = kwargs.pop('images', {0:self.truth,1:img})
+        titles = kwargs.pop('titles', {0:'Truth',1:'Reconstruction'})
+        n_imgs = len(images)
         import matplotlib.pyplot as plt
-        plt.set_cmap('Greys')
+        plt.set_cmap(kwargs.pop('cmap','Greys'))
         # from util import matplot4dolfin
         # matplot=matplot4dolfin()
-        fig, axes = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(12, 5))
+        fig, axes = plt.subplots(1, n_imgs, sharex=True, sharey=True, figsize=(n_imgs*5, 5))
         for i,ax in enumerate(axes.flat):
-            img = {0:self.truth,1:self.obs}[i]
             plt.axes(ax)
-            plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
-            ax.set_title({0:'Truth',1:'Observation'}[i],fontsize=16)
+            ax.imshow(images[i], origin='lower',extent=[0, 1, 0, 1])
+            ax.set_title(titles[i],fontsize=16)
             ax.set_aspect('auto')
         plt.subplots_adjust(wspace=0.1, hspace=0.1)
+        if save_img:
+            if not os.path.exists(save_path): os.makedirs(save_path)
+            save_fname = kwargs.pop('save_fname',titles[n_imgs-1])+'.png'
+            plt.savefig(save_path+'/'+save_fname,bbox_inches='tight')
         return fig
     
 if __name__ == '__main__':
@@ -141,14 +166,24 @@ if __name__ == '__main__':
     # test
     nll=msft.cost(msft.obs)
     grad=msft.grad(msft.obs)
+    hess=msft.Hess(msft.obs)
     h=1e-6
     gradv_fd=(msft.cost(msft.obs+h*msft.truth)-nll)/h
     gradv=grad.dot(msft.truth.flatten())
     rdiff_gradv=np.abs(gradv_fd-gradv)/np.linalg.norm(msft.truth)
     print('Relative difference of gradients in a direction between direct calculation and finite difference: %.10f' % rdiff_gradv)
+    hessv_fd=(msft.grad(msft.obs+h*msft.truth)-grad)/h
+    hessv=hess(msft.truth)
+    rdiff_hessv=np.linalg.norm(hessv_fd-hessv)/np.linalg.norm(msft.truth)
+    print('Relative difference of Hessian-action in a direction between direct calculation and finite difference: %.10f' % rdiff_hessv)
     # plot
     import matplotlib.pyplot as plt
-    fig=msft.plot_data()
-    # fig.tight_layout()
-    fig.savefig('./properties/truth_obs.png',bbox_inches='tight')
+    # fig=msft.plot_data()
+    # # fig.tight_layout()
+    # fig.savefig('./properties/truth_obs.png',bbox_inches='tight')
+    # plt.show()
+    # plot reconstruction
+    rcstr_LSE=msft.reconstruct_LSE(lmda=0.1)
+    fig=msft.plot_data(images={0:msft.truth,1:msft.obs,2:rcstr_LSE}, titles={0:'Truth',1:'Observation',2:'LSE-reconstruction'},
+                       save_img=True, save_path='./properties', save_fname='truth_obs_recnstr')
     plt.show()

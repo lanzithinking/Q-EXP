@@ -13,7 +13,7 @@ __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2019, TESD project"
 __credits__ = ""
 __license__ = "GPL"
-__version__ = "0.4"
+__version__ = "0.5"
 __maintainer__ = "Shiwei Lan"
 __email__ = "shiwei@illinois.edu; lanzithinking@gmail.com; slan@asu.edu"
 
@@ -65,6 +65,7 @@ def mdivf(a,b,transp=False):
             raise Exception('Wrong dimension of b!')
     else:
         c=solver(a,b)
+        if c.shape!=b.shape: c=c.reshape(b.shape,order='F') # spsla.spsolve drops the singleton dimension
     return c
     
 def itsol(a,b,solver='cg',transp=False,comm=None,**kwargs):

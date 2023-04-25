@@ -7,6 +7,8 @@ Modified January 11, 2023 @ ASU
 
 import os
 import numpy as np
+import numba as nb
+from numba import cuda
 
 try:
     import dolfin as df
@@ -136,7 +138,7 @@ def eigen_RA_rank(A,dim=None,which='LM',k=20,p=10):
         dim=A.shape[0]
     Omega=np.random.randn(dim,k+p)
     # Y=A.dot(Omega) #if type(A) is np.ndarray else np.array([A(r) for r in Omega.T]).T
-    Y=A(Omega) if callable(A) else A.dot(Omega)
+    Y=nb.jit(nopython=True)(A)(Omega)
     eigv,eigf_vec=_eigen_randproj(Omega,Y,srt_ord={'SM':'asc','LM':'dsc'}[which])
     eigv=eigv[:k]
     eigf_vec=eigf_vec[:,:k]
@@ -156,7 +158,7 @@ def eigen_RA_prec(A,dim=None,which='LM',threshold=0.01,increment_k=20,p=10):
         dim=A.shape[0]
     Omega=np.random.randn(dim,increment_k+p)
     # Y=A.dot(Omega) #if type(A) is np.ndarray else np.array([A(r) for r in Omega.T]).T
-    Y=A(Omega) if callable(A) else A.dot(Omega)
+    Y=nb.jit(nopython=True,target='cuda')(A)(Omega)
     eigv=np.zeros(0); eigf_vec=np.zeros((dim,0))
     num_eigs=0
     while num_eigs<dim+np.float_(increment_k)/2:
@@ -196,8 +198,7 @@ def _geigen_randproj(Omega,Y_bar,Y,B,srt_ord='asc'):
     """
     #-------- begin pre-CholQR(Y,B) -------#
     Z,_=np.linalg.qr(Y)
-    # BZ=B.dot(Z) #if type(B) is np.ndarray else np.array([B(r) for r in Z.T]).T
-    BZ=B(Z) if callable(B) else B.dot(Z)
+    BZ=B.dot(Z) #if type(B) is np.ndarray else np.array([B(r) for r in Z.T]).T
     R=np.linalg.cholesky(Z.T.dot(BZ))
     Q=np.linalg.solve(R,Z.T).T
     #-------- end pre-CholQR(Y,B) -------#
@@ -228,16 +229,14 @@ def geigen_RA_rank(A,B,invB,dim=None,which='LM',k=20,p=10):
         dim=A.shape[0]
     Omega=np.random.randn(dim,k+p)
     # if all([type(x) is np.ndarray for x in (A,invB)]):
-    # Y_bar=A.dot(Omega)
-    # Y=invB.dot(Y_bar)
+    Y_bar=A.dot(Omega)
+    Y=invB.dot(Y_bar)
     # else:
     #     Y_bar=np.zeros((dim,k+p))
     #     Y=np.zeros((dim,k+p))
     #     for i in range(k+p):
     #         Y_bar[:,i]=A(Omega[:,i])
     #         Y[:,i]=invB(Y_bar[:,i])
-    Y_bar=A(Omega) if callable(A) else A.dot(Omega)
-    Y=invB(Y_bar) if callable(invB) else invB.dot(Y_bar)
     eigv,eigf_vec=_geigen_randproj(Omega,Y_bar,Y,B,srt_ord={'SM':'asc','LM':'dsc'}[which])
     eigv=eigv[:k]
     eigf_vec=eigf_vec[:,:k]
@@ -257,16 +256,14 @@ def geigen_RA_prec(A,B,invB,dim=None,which='LM',threshold=0.01,increment_k=20,p=
         dim=A.shape[0]
     Omega=np.random.randn(dim,increment_k+p)
     # if all([type(x) is np.ndarray for x in (A,invB)]):
-    # Y_bar=A.dot(Omega)
-    # Y=invB.dot(Y_bar)
+    Y_bar=A.dot(Omega)
+    Y=invB.dot(Y_bar)
     # else:
     #     Y_bar=np.zeros((dim,increment_k+p))
     #     Y=np.zeros((dim,increment_k+p))
     #     for i in range(increment_k+p):
     #         Y_bar[:,i]=A(Omega[:,i])
     #         Y[:,i]=invB(Y_bar[:,i])
-    Y_bar=A(Omega) if callable(A) else A.dot(Omega)
-    Y=invB(Y_bar) if callable(invB) else invB.dot(Y_bar)
     eigv=np.zeros(0); eigf_vec=np.zeros((dim,0))
     num_eigs=0
     BOmega=None
@@ -282,8 +279,7 @@ def geigen_RA_prec(A,B,invB,dim=None,which='LM',threshold=0.01,increment_k=20,p=
             break
         else:
             if BOmega is None:
-                # BOmega=B.dot(Omega) #if type(B) is np.ndarray else np.array([B(r) for r in Omega.T]).T
-                BOmega=B(Omega) if callable(B) else B.dot(Omega)
+                BOmega=B.dot(Omega) #if type(B) is np.ndarray else np.array([B(r) for r in Omega.T]).T
             Y-=(eigf_vec_k*eigv_k).dot(eigf_vec_k.T).dot(BOmega)
             Y_bar=B(Y)#np.array([B(Y[:,i]) for i in range(increment_k+p)]).T
         num_eigs+=increment_k
