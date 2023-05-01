@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-Class definition of data-misfit for linear inverse problem of Shepp-Logan head phantom.
----------------------------------------------------------------------------------------
+Class definition of data-misfit for linear inverse problem of head CT.
+-------------------------------------------------------------------------
 Created April 26, 2023 for project of q-exponential process prior (Q-EXP)
 """
 __author__ = "Shiwei Lan"
@@ -29,18 +29,19 @@ class misfit(object):
     def __init__(self, **kwargs):
         """
         Initialize data-misfit class with information of observations.
+        Download data at https://drive.google.com/drive/folders/1VvL3U3o4V4-itrAo8gUBwatLCyGvEjFT?usp=sharing
         """
-        self.CT_set = kwargs.pop('CT_set','proj60_loc100') # CT set
-        self.SNR = kwargs.pop('SNR',100)
+        self.CT_set = kwargs.pop('CT_set','proj200_loc512') # CT set
+        self.data_set = kwargs.pop('data_set','head')
         # get observations
         self.proj, self.obs, self.nzvar, self.size, self.truth = self.get_obs(**kwargs)
     
-    def _gen_shepp_logan(self):
+    def _gen_head_CT(self):
         """
-        Generate Shepp Logan head phantom observations
+        Generate head CT observations stored at https://drive.google.com/drive/folders/1VvL3U3o4V4-itrAo8gUBwatLCyGvEjFT?usp=sharing
         """
-        CT_name = 'CT_x128_'+self.CT_set
-        dat_name = 'Shepp-Logan_'+self.CT_set.split('_')[0]+'_SNR'+str(self.SNR)
+        CT_name = 'CT_x512_'+self.CT_set
+        dat_name = self.data_set
         CT = spio.loadmat('./'+CT_name+'.mat')
         A,phi,s = CT['A'],CT['phi'],CT['s']
         data = spio.loadmat('./data/'+dat_name+'.mat')
@@ -51,7 +52,7 @@ class misfit(object):
         """
         Observe image projections
         """
-        projection, angles, distances, truth, observation = self._gen_shepp_logan()
+        projection, angles, distances, truth, observation = self._gen_head_CT()
         observation = observation.flatten(order='F')
         noise = projection.dot(truth.flatten(order='F'))-observation
         nzvar = np.var(noise)
@@ -141,7 +142,7 @@ class misfit(object):
 if __name__ == '__main__':
     np.random.seed(2022)
     # define the misfit
-    msft = misfit(CT_set='proj90_loc100')
+    msft = misfit(CT_set='proj200_loc512')
     # test
     u = np.random.randn(np.prod(msft.size))
     nll=msft.cost(u)
@@ -163,7 +164,7 @@ if __name__ == '__main__':
     # fig.savefig('./properties/truth_obs.png',bbox_inches='tight')
     # plt.show()
     # plot reconstruction
-    projection, angles, distances, truth, observation = msft._gen_shepp_logan()
+    projection, angles, distances, truth, observation = msft._gen_head_CT()
     rcstr_LSE=msft.reconstruct_LSE(lmda=0.1)
     fig=msft.plot_data(images={0:msft.truth,1:msft.obs.reshape((angles.size,distances.size),order='F').T,2:rcstr_LSE}, titles={0:'Truth',1:'Observation',2:'LSE-reconstruction'},
                        save_img=True, save_path='./properties', save_fname='truth_obs_recnstr', cmap='gray')

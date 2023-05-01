@@ -80,7 +80,7 @@ class Ker:
         # read image from given location
         img=plt.imread(path2img,format)
         # convert RGB image into grayscale
-        if img.shape[-1]>=3: img=np.sum(img[:,:,:3]*np.array([0.2989,0.5870,0.1140]),axis=img.ndim-1)
+        if img.ndim==3 and img.shape[-1]>=3: img=np.sum(img[:,:,:3]*np.array([0.2989,0.5870,0.1140]),axis=img.ndim-1)
         return img
     
     def _get_Laplacian(self,graph=None,weightedge=False,normalize=False):

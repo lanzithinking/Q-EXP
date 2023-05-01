@@ -19,7 +19,7 @@
 module load anaconda3/2020.2
 
 # go to working directory
-cd ~/Projects/qEP/code/linv
+cd ~/Projects/qEP/code/CT_head
 
 python -u get_mcmc_rem_comparepri.py
 # sbatch --job-name=get_rem --output=get_rem.log get_mcmc_rem.sh

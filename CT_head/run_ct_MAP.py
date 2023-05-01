@@ -18,7 +18,7 @@ np.set_printoptions(precision=3, suppress=True)
 
 def main(seed=2022):
     parser = argparse.ArgumentParser()
-    parser.add_argument('mdl_NO', nargs='?', type=int, default=0)
+    parser.add_argument('mdl_NO', nargs='?', type=int, default=2)
     parser.add_argument('ker_NO', nargs='?', type=int, default=1)
     parser.add_argument('q', nargs='?', type=int, default=1)
     parser.add_argument('whiten', nargs='?', type=int, default=0) # choose to optimize in white noise representation space
@@ -35,16 +35,16 @@ def main(seed=2022):
                   'ker_opt':'serexp' if args.mdls[args.mdl_NO]=='bsv' else args.kers[args.ker_NO],
                   # 'ker_opt':{'gp':'graphL','bsv':'serexp','qep':args.kers[args.ker_NO]}[args.mdls[args.mdl_NO]],
                   'basis_opt':'Fourier', # serexp param
-                  'KL_trunc':2000,
+                  'KL_trunc':5000,
                   'space':'vec' if args.kers[args.ker_NO]!='graphL' else 'fun',
-                  'sigma2':1e-2,
-                  's':1 if args.mdls[args.mdl_NO]=='bsv' else 2,
+                  'sigma2':1e3,
+                  's':2 if args.mdls[args.mdl_NO]=='gp' else 1,
                   'q':2 if args.mdls[args.mdl_NO]=='gp' else args.q,
                   'store_eig':args.kers[args.ker_NO]!='graphL',
                   'normalize':True, # graphL param
                   'weightedge':True} # graphL param
-    lik_params={'CT_set':'proj90_loc100',
-                'SNR':100}
+    lik_params={'CT_set':'proj200_loc512',
+                'data_set':'head'}
     ct = CT(**prior_params,**lik_params,seed=seed)
     truth = ct.misfit.truth
     

@@ -301,14 +301,14 @@ if __name__ == '__main__':
                   'basis_opt':'Fourier', # serexp param
                   'KL_trunc':2000,
                   'space':'vec',
-                  'sigma2':1e-2,
+                  'sigma2':100,
                   's':2,
                   'q':1,
                   'store_eig':True,
                   'normalize':True, # graphL param
                   'weightedge':True} # graphL param
-    lik_params={'CT_set':'proj90_loc100',
-                'SNR':100}
+    lik_params={'CT_set':'proj200_loc512',
+                'data_set':'head'}
     # prior_option = 'gp'
     # fltnz = 2
     # basis_opt = 'Fourier'

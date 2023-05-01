@@ -1,5 +1,5 @@
 """
-Plot estimates of uncertainty field u in linear inverse problem.
+Plot estimates of uncertainty field u in linear inverse problem of Shepp-Logan head phantom.
 ----------------------
 Shiwei Lan @ ASU, 2022
 """
@@ -10,31 +10,33 @@ import matplotlib.pyplot as plt
 import matplotlib as mp
 
 # the inverse problem
-from Linv import Linv
+from CT import CT
 
 
-seed=2022
-# define the inverse problem
-fltnz = 2
-ker_opt = 'serexp'
-basis_opt = 'Fourier'
-KL_trunc = 2000
-space = 'fun' if ker_opt=='graphL' else 'vec'
-sigma2 = 1
-s = 1
-q = 1
-store_eig = (ker_opt!='graphL')
-prior_params={'ker_opt':ker_opt,
-              'basis_opt':basis_opt, # serexp param
-              'KL_trunc':KL_trunc,
-              'space':space,
-              'sigma2':sigma2,
-              's':s,
-              'q':q,
-              'store_eig':store_eig}
-lik_params={'fltnz':fltnz}
-linv = Linv(fltnz=fltnz, ker_opt=ker_opt, basis_opt=basis_opt, KL_trunc=KL_trunc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
-# truth = linv.misfit.truth
+# seed=2022
+# # define the inverse problem
+# CT_set='proj200_loc512'
+# data_set='head'
+# ker_opt = 'serexp'
+# basis_opt = 'Fourier'
+# KL_trunc = 5000
+# space = 'vec' #if ker_opt!='graphL' else 'fun'
+# sigma2 = 1e3
+# s = 1
+# q = 1
+# store_eig = True#(ker_opt!='graphL')
+# prior_params={'ker_opt':ker_opt,
+#               'basis_opt':basis_opt, # serexp param
+#               'KL_trunc':KL_trunc,
+#               'space':space,
+#               'sigma2':sigma2,
+#               's':s,
+#               'q':q,
+#               'store_eig':store_eig}
+# lik_params={'CT_set':CT_set,
+#             'data_set':data_set}
+# ct = CT(**lik_params, **prior_params, seed=seed, normalize=True, weightedge=True)
+# # truth = ct.misfit.truth
 
 # models
 pri_mdls=('GP','BSV','qEP')
@@ -55,21 +57,22 @@ else:
         # preparation
         prior_params['prior_option']={'GP':'gp','BSV':'bsv','qEP':'qep'}[pri_mdls[m]]
         prior_params['q']=2 if prior_params['prior_option']=='gp' else q
-        linv = Linv(**prior_params,**lik_params,seed=seed)
-        truth = linv.misfit.truth
+        prior_params['s']=2 if prior_params['prior_option']=='gp' else s
+        ct = CT(**lik_params,**prior_params,seed=seed)
+        truth = ct.misfit.truth
         print('Processing '+pri_mdls[m]+' prior model...\n')
         fld_m = folder+'/'+pri_mdls[m]
         # preparation for estimates
         if os.path.exists(fld_m):
-            npz_files=[f for f in os.listdir(fld_m) if f.endswith('.npz')]
+            npz_files=[f for f in os.listdir(fld_m) if f.endswith('.npz') and f.startswith('wpCN_')]
             for f_i in npz_files:
                 try:
                     f_read=np.load(os.path.join(fld_m,f_i))
                     samp=f_read['samp_u' if '_hp_' in f_i else 'samp']
-                    if linv.prior.space=='vec': samp=linv.prior.vec2fun(samp.T).T
-                    med_f[m]=np.median(samp,axis=0).reshape(linv.misfit.size)
-                    mean_f[m]=np.mean(samp,axis=0).reshape(linv.misfit.size)
-                    std_f[m]=np.std(samp,axis=0).reshape(linv.misfit.size)
+                    if ct.prior.space=='vec': samp=ct.prior.vec2fun(samp.T).T
+                    med_f[m]=np.median(samp,axis=0).reshape(ct.misfit.size,order='F')
+                    mean_f[m]=np.mean(samp,axis=0).reshape(ct.misfit.size,order='F')
+                    std_f[m]=np.std(samp,axis=0).reshape(ct.misfit.size,order='F')
                     print(f_i+' has been read!'); break
                 except:
                     pass
@@ -79,7 +82,7 @@ else:
     f.close()
 
 # plot 
-plt.rcParams['image.cmap'] = 'binary'
+plt.rcParams['image.cmap'] = 'gray'
 num_rows=1
 titles = ['Truth']+mdl_names
 
@@ -112,7 +115,7 @@ plt.savefig(folder+'/mcmc_estimates_mean_comparepri.png',bbox_inches='tight')
 # plt.show()
 
 # posterior std
-fig,axes = plt.subplots(nrows=num_rows,ncols=num_mdls,sharex=True,sharey=True,figsize=(12,4))
+fig,axes = plt.subplots(nrows=num_rows,ncols=num_mdls,sharex=True,sharey=True,figsize=(14,4))
 sub_figs = [None]*len(axes.flat)
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
@@ -120,7 +123,8 @@ for i,ax in enumerate(axes.flat):
     sub_figs[i]=plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
     ax.set_title(titles[i+1],fontsize=16)
     ax.set_aspect('auto')
-# set color bar
+    plt.colorbar()
+# # set color bar
 # from util.common_colorbar import common_colorbar
 # fig=common_colorbar(fig,axes,sub_figs)
 plt.subplots_adjust(wspace=0.1, hspace=0.2)

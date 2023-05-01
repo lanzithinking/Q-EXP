@@ -1,5 +1,5 @@
 """
-Get relative error of MAP for uncertainty field u in linear inverse problem.
+Get relative error of MAP for uncertainty field u in linear inverse problem of Shepp-Logan head phantom.
 ----------------------
 Shiwei Lan @ ASU, 2022
 """
@@ -10,19 +10,20 @@ import matplotlib.pyplot as plt
 import matplotlib as mp
 
 # the inverse problem
-from Linv import Linv
+from CT import CT
 
 seed=2022
 # define the inverse problem
-fltnz = 2
+CT_set='proj90_loc100'
+SNR=100
 ker_opt = 'serexp'
 basis_opt = 'Fourier'
 KL_trunc = 2000
-space = 'fun' if ker_opt=='graphL' else 'vec'
-sigma2 = 1
-s = 1
+space = 'vec' #if ker_opt!='graphL' else 'fun'
+sigma2 = 1e-2
+s = 2
 q = 1
-store_eig = (ker_opt!='graphL')
+store_eig = True#(ker_opt!='graphL')
 prior_params={'ker_opt':ker_opt,
               'basis_opt':basis_opt, # serexp param
               'KL_trunc':KL_trunc,
@@ -31,9 +32,10 @@ prior_params={'ker_opt':ker_opt,
               's':s,
               'q':q,
               'store_eig':store_eig}
-lik_params={'fltnz':fltnz}
-# linv = Linv(fltnz=fltnz, ker_opt=ker_opt, basis_opt=basis_opt, KL_trunc=KL_trunc, space=space, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
-# truth = linv.misfit.truth
+lik_params={'CT_set':CT_set,
+            'SNR':SNR}
+ct = CT(**lik_params, **prior_params, seed=seed, normalize=True, weightedge=True)
+# truth = ct.misfit.truth
 
 # models
 pri_mdls=('GP','BSV','qEP')
@@ -52,26 +54,26 @@ for m in range(num_mdls):
     # preparation
     prior_params['prior_option']={'GP':'gp','BSV':'bsv','qEP':'qep'}[pri_mdls[m]]
     prior_params['q']=2 if prior_params['prior_option']=='gp' else q
-    linv = Linv(**prior_params,**lik_params,seed=seed)
-    truth = linv.misfit.truth
+    prior_params['s']=1 if prior_params['prior_option']=='bsv' else s
+    ct = CT(**prior_params,**lik_params,seed=seed)
+    truth = ct.misfit.truth
     print('Processing '+pri_mdls[m]+' prior model...\n')
     fld_m = folder+'/'+pri_mdls[m]
     # preparation for estimates
     if os.path.exists(fld_m):
-        errs=[]
+        errs=[]; files_read=[]
         num_read=0
-        pckl_files=[f for f in os.listdir(fld_m) if f.endswith('.pckl')]
-        for f_i in pckl_files:
+        npz_files=[f for f in os.listdir(fld_m) if f.endswith('.npz') and f.startswith('wpCN_')]
+        for f_i in npz_files:
             try:
-                f=open(os.path.join(fld_m,f_i),'rb')
-                f_read=pickle.load(f)
-                samp=f_read[-4]
-                if linv.prior.space=='vec': samp=linv.prior.vec2fun(samp.T).T
-                samp_mean=np.mean(samp,axis=0)
+                f_read=np.load(os.path.join(fld_m,f_i))
+                samp=f_read['samp_u' if '_hp_' in f_i else 'samp']
+                if ct.prior.space=='vec': samp=ct.prior.vec2fun(samp.T).T
+                samp_mean=np.mean(samp,axis=0).reshape(ct.misfit.size,order='F')
                 # compute error
-                errs.append(np.linalg.norm(samp_mean-truth.flatten())/np.linalg.norm(truth.flatten()))
+                errs.append(np.linalg.norm(samp_mean-truth)/np.linalg.norm(truth))
+                files_read.append(f_i)
                 num_read+=1
-                f.close()
                 print(f_i+' has been read!')
             except:
                 pass
@@ -82,15 +84,14 @@ for m in range(num_mdls):
             rem_s[m] = errs.std()
             # get the best for plotting
             if not os.path.exists(os.path.join(folder,'mcmc_summary.pckl')):
-                f_i=pckl_files[np.argmin(errs)]
-                f=open(os.path.join(fld_m,f_i),'rb')
-                f_read=pickle.load(f)
-                samp=f_read[-4]
-                if linv.prior.space=='vec': samp=linv.prior.vec2fun(samp.T).T
-                med_f[m]=np.median(samp,axis=0)
-                mean_f[m]=np.mean(samp,axis=0)
-                std_f[m]=np.std(samp,axis=0)
-                f.close()
+                f_i=files_read[np.argmin(errs)]
+                f_read=np.load(os.path.join(fld_m,f_i))
+                samp=f_read['samp_u' if '_hp_' in f_i else 'samp']
+                if ct.prior.space=='vec': samp=ct.prior.vec2fun(samp.T).T
+                med_f[m]=np.median(samp,axis=0).reshape(ct.misfit.size,order='F')
+                mean_f[m]=np.mean(samp,axis=0).reshape(ct.misfit.size,order='F')
+                std_f[m]=np.std(samp,axis=0).reshape(ct.misfit.size,order='F')
+                print(f_i+' has been selected for plotting.')
 if not os.path.exists(os.path.join(folder,'mcmc_summary.pckl')):
     f=open(os.path.join(folder,'mcmc_summary.pckl'),'wb')
     pickle.dump([truth,med_f,mean_f,std_f],f)

@@ -10,20 +10,20 @@ import matplotlib.pyplot as plt
 import matplotlib as mp
 
 # the inverse problem
-from CT import CT
+# from CT import CT
 from misfit import misfit
 
 seed=2022
 # define the inverse problem
-CT_set='proj90_loc100'
-SNR=100
+CT_set='proj200_loc512'
+data_set='head'
 # basis_opt = 'Fourier'
-# KL_trunc = 2000
-# sigma2 = 1
+# KL_trunc = 5000
+# sigma2 = 1e3
 # s = 1
 # store_eig = True
-# ct = CT(CT_set=CT_set, SNR=SNR, basis_opt=basis_opt, KL_trunc=KL_trunc, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
-msft = misfit(CT_set=CT_set, SNR=SNR)
+# ct = CT(CT_set=CT_set, data_set=data_set, basis_opt=basis_opt, KL_trunc=KL_trunc, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
+msft = misfit(CT_set=CT_set, data_set=data_set)
 
 # models
 pri_mdls=('gp','bsv','qep')

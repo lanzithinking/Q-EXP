@@ -19,7 +19,7 @@
 module load anaconda3/2020.2
 
 # go to working directory
-cd ~/Projects/qEP/code/CT
+cd ~/Projects/qEP/code/CT_head
 
 # run python script
 if [ $# -eq 0 ]; then

@@ -62,7 +62,7 @@ class GP:
         """
         eigv,_=self.ker.eigs()
         abs_eigv=abs(eigv)
-        ldet=np.sum(np.log(abs_eigv[abs_eigv>=np.finfo(np.float).eps]))
+        ldet=np.sum(np.log(abs_eigv[abs_eigv>=np.finfo(float).eps]))
         return ldet
     
     def logpdf(self,X,nu=1,chol=False,incldet=True):

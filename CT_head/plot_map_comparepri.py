@@ -10,18 +10,20 @@ import matplotlib.pyplot as plt
 import matplotlib as mp
 
 # the inverse problem
-from CT import CT
+# from CT import CT
+from misfit import misfit
 
 seed=2022
 # define the inverse problem
-CT_set='proj90_loc100'
-SNR=100
-basis_opt = 'Fourier'
-KL_trunc = 2000
-sigma2 = 1e-2
-s = 1
-store_eig = True
-ct = CT(CT_set=CT_set, SNR=SNR, basis_opt=basis_opt, KL_trunc=KL_trunc, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
+CT_set='proj200_loc512'
+data_set='head'
+# basis_opt = 'Fourier'
+# KL_trunc = 5000
+# sigma2 = 1e3
+# s = 1
+# store_eig = True
+# ct = CT(CT_set=CT_set, data_set=data_set, basis_opt=basis_opt, KL_trunc=KL_trunc, sigma2=sigma2, s=s, store_eig=store_eig, seed=seed, normalize=True, weightedge=True)
+msft = misfit(CT_set=CT_set, data_set=data_set)
 
 # models
 pri_mdls=('gp','bsv','qep')
@@ -79,7 +81,7 @@ else:
 # plt.savefig(folder+'/maps_comparepri.png',bbox_inches='tight')
 # # plt.show()
 
-A, phi, s, x_true, b=ct.misfit._gen_shepp_logan()
+A, phi, s, x_true, b=msft._gen_shepp_logan()
 # plot 
 plt.rcParams['image.cmap'] = 'gray'
 num_rows=1
@@ -88,9 +90,9 @@ fig,axes = plt.subplots(nrows=num_rows,ncols=2+num_mdls,sharex=False,sharey=True
 titles = ['Truth','Observation']+mdl_names
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
-    img=truth if i==0 else ct.misfit.obs.reshape((phi.size,s.size),order='F').T if i==1 else maps[i-2]
+    img=truth if i==0 else msft.obs.reshape((phi.size,s.size),order='F').T if i==1 else maps[i-2]
     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
-    if i==1: ax.set_xticklabels(['$-\pi/2$','$-3\pi/10$','$-\pi/10$','$\pi/10$','$3\pi/10$','$\pi/2$'])
+    if i==1: ax.set_xticklabels(['$\pi$','$-4\pi/5$','$-3\pi/5$','$-2\pi/5$','$-\pi/5$','$0$'])
     ax.set_title(titles[i],fontsize=16)
     ax.set_aspect('auto')
 plt.subplots_adjust(wspace=0.1, hspace=0.2)
