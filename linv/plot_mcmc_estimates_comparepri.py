@@ -83,36 +83,36 @@ plt.rcParams['image.cmap'] = 'binary'
 num_rows=1
 titles = ['Truth']+mdl_names
 
-# posterior median
-fig,axes = plt.subplots(nrows=num_rows,ncols=1+num_mdls,sharex=True,sharey=True,figsize=(16,4))
-for i,ax in enumerate(axes.flat):
-    plt.axes(ax)
-    img=truth if i==0 else med_f[i-1]
-    plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
-    ax.set_title(titles[i],fontsize=16)
-    ax.set_aspect('auto')
-plt.subplots_adjust(wspace=0.1, hspace=0.2)
-# save plot
-# fig.tight_layout()
-plt.savefig(folder+'/mcmc_estimates_med_comparepri.png',bbox_inches='tight')
-# plt.show()
-
-# posterior mean
-fig,axes = plt.subplots(nrows=num_rows,ncols=1+num_mdls,sharex=True,sharey=True,figsize=(16,4))
-for i,ax in enumerate(axes.flat):
-    plt.axes(ax)
-    img=truth if i==0 else mean_f[i-1]
-    plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
-    ax.set_title(titles[i],fontsize=16)
-    ax.set_aspect('auto')
-plt.subplots_adjust(wspace=0.1, hspace=0.2)
-# save plot
-# fig.tight_layout()
-plt.savefig(folder+'/mcmc_estimates_mean_comparepri.png',bbox_inches='tight')
-# plt.show()
+# # posterior median
+# fig,axes = plt.subplots(nrows=num_rows,ncols=1+num_mdls,sharex=True,sharey=True,figsize=(16,4))
+# for i,ax in enumerate(axes.flat):
+#     plt.axes(ax)
+#     img=truth if i==0 else med_f[i-1]
+#     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
+#     ax.set_title(titles[i],fontsize=16)
+#     ax.set_aspect('auto')
+# plt.subplots_adjust(wspace=0.1, hspace=0.2)
+# # save plot
+# # fig.tight_layout()
+# plt.savefig(folder+'/mcmc_estimates_med_comparepri.png',bbox_inches='tight')
+# # plt.show()
+#
+# # posterior mean
+# fig,axes = plt.subplots(nrows=num_rows,ncols=1+num_mdls,sharex=True,sharey=True,figsize=(16,4))
+# for i,ax in enumerate(axes.flat):
+#     plt.axes(ax)
+#     img=truth if i==0 else mean_f[i-1]
+#     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
+#     ax.set_title(titles[i],fontsize=16)
+#     ax.set_aspect('auto')
+# plt.subplots_adjust(wspace=0.1, hspace=0.2)
+# # save plot
+# # fig.tight_layout()
+# plt.savefig(folder+'/mcmc_estimates_mean_comparepri.png',bbox_inches='tight')
+# # plt.show()
 
 # posterior std
-fig,axes = plt.subplots(nrows=num_rows,ncols=num_mdls,sharex=True,sharey=True,figsize=(12,4))
+fig,axes = plt.subplots(nrows=num_rows,ncols=num_mdls,sharex=True,sharey=True,figsize=(14,4))
 sub_figs = [None]*len(axes.flat)
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
@@ -120,6 +120,7 @@ for i,ax in enumerate(axes.flat):
     sub_figs[i]=plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
     ax.set_title(titles[i+1],fontsize=16)
     ax.set_aspect('auto')
+    plt.colorbar()
 # set color bar
 # from util.common_colorbar import common_colorbar
 # fig=common_colorbar(fig,axes,sub_figs)

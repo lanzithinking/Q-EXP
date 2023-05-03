@@ -129,7 +129,7 @@ class misfit(object):
         fig, axes = plt.subplots(1, n_imgs, sharex=True, sharey=True, figsize=(n_imgs*5, 5))
         for i,ax in enumerate(axes.flat):
             plt.axes(ax)
-            ax.imshow(images[i], origin='lower',extent=[0, 1, 0, 1])
+            ax.imshow(images[i],extent=[0, 1, 0, 1])
             ax.set_title(titles[i],fontsize=16)
             ax.set_aspect('auto')
         plt.subplots_adjust(wspace=0.1, hspace=0.1)

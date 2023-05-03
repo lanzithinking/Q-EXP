@@ -32,7 +32,7 @@ def main(seed=2022):
     parser.add_argument('num_burnin', nargs='?', type=int, default=5000)
     parser.add_argument('mdls', nargs='?', type=str, default=('gp','bsv','qep'))
     parser.add_argument('kers', nargs='?', type=str, default=('covf','serexp','graphL'))
-    parser.add_argument('step_sizes', nargs='?', type=float, default=(1e-6,1e-4,1e-4,1e-3,1e-3))
+    parser.add_argument('step_sizes', nargs='?', type=float, default=(1e-7,1e-4,1e-4,1e-3,1e-3))
     parser.add_argument('step_nums', nargs='?', type=int, default=[1,1,5,1,5])
     parser.add_argument('algs', nargs='?', type=str, default=('wpCN','winfMALA','winfHMC','winfmMALA','winfmHMC'))
     args = parser.parse_args()

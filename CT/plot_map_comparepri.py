@@ -70,7 +70,7 @@ else:
 # for i,ax in enumerate(axes.flat):
 #     plt.axes(ax)
 #     img=truth if i==0 else maps[i-1]
-#     plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
+#     plt.imshow(img,extent=[0, 1, 0, 1])
 #     ax.set_title(titles[i],fontsize=16)
 #     ax.set_aspect('auto')
 # plt.subplots_adjust(wspace=0.1, hspace=0.2)
@@ -89,7 +89,7 @@ titles = ['Truth','Observation']+mdl_names
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
     img=truth if i==0 else ct.misfit.obs.reshape((phi.size,s.size),order='F').T if i==1 else maps[i-2]
-    plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
+    plt.imshow(img,extent=[0, 1, 0, 1])
     if i==1: ax.set_xticklabels(['$-\pi/2$','$-3\pi/10$','$-\pi/10$','$\pi/10$','$3\pi/10$','$\pi/2$'])
     ax.set_title(titles[i],fontsize=16)
     ax.set_aspect('auto')

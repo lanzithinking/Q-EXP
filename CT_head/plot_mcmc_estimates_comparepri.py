@@ -91,7 +91,8 @@ fig,axes = plt.subplots(nrows=num_rows,ncols=1+num_mdls,sharex=True,sharey=True,
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
     img=truth if i==0 else med_f[i-1]
-    plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
+    img=img[88:400,88:400]
+    plt.imshow(img,extent=[0, 1, 0, 1])
     ax.set_title(titles[i],fontsize=16)
     ax.set_aspect('auto')
 plt.subplots_adjust(wspace=0.1, hspace=0.2)
@@ -105,7 +106,8 @@ fig,axes = plt.subplots(nrows=num_rows,ncols=1+num_mdls,sharex=True,sharey=True,
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
     img=truth if i==0 else mean_f[i-1]
-    plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
+    img=img[88:400,88:400]
+    plt.imshow(img,extent=[0, 1, 0, 1])
     ax.set_title(titles[i],fontsize=16)
     ax.set_aspect('auto')
 plt.subplots_adjust(wspace=0.1, hspace=0.2)
@@ -120,7 +122,8 @@ sub_figs = [None]*len(axes.flat)
 for i,ax in enumerate(axes.flat):
     plt.axes(ax)
     img=std_f[i]
-    sub_figs[i]=plt.imshow(img, origin='lower',extent=[0, 1, 0, 1])
+    img=img[88:400,88:400]
+    sub_figs[i]=plt.imshow(img,extent=[0, 1, 0, 1])
     ax.set_title(titles[i+1],fontsize=16)
     ax.set_aspect('auto')
     plt.colorbar()
