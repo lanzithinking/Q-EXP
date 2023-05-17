@@ -8,7 +8,7 @@ updated April 23, 2023 for project of q-exponential process prior (Q-EXP)
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The STBP project and the Q-EXP project"
 __license__ = "GPL"
-__version__ = "0.4"
+__version__ = "0.5"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu lanzithinking@outlook.com"
 
@@ -40,7 +40,7 @@ class whiten:
             def grad(v, adj=False):
                 _v = v.reshape((self.prior.dim,-1),order='F')
                 if adj:
-                    _v = self.prior.C_act(_v, comp=0.5)
+                    _v = self.prior.C_act(_v, comp=0.5, adjt=adj)
                     dLmdv = _z*np.sum(_z*_v,axis=0,keepdims=True)*nm_z**(2/q-3)*(2/q-1) + _v*nm_z**(2/q-1)
                     return dLmdv.squeeze()
                 else:
@@ -50,7 +50,7 @@ class whiten:
             def hess(v, w, adj=False):
                 _v = v.reshape((self.prior.dim,-1),order='F')
                 _w = w.reshape((self.prior.dim,-1),order='F')
-                Hv0 = (2/q-1)*self.prior.C_act(_w*np.sum(_z*_v,axis=0,keepdims=True)*nm_z**(2/q-3), comp=0.5)
+                Hv0 = (2/q-1)*self.prior.C_act(_w*np.sum(_z*_v,axis=0,keepdims=True)*nm_z**(2/q-3), comp=0.5, adjt=adj)
                 Hv1 = (2/q-1)*self.prior.C_act(_z*nm_z**(2/q-3), comp=0.5)
                 Hv2 = (2/q-1)*self.prior.C_act(_z*np.sum(_z*_v,axis=0,keepdims=True)*nm_z**(2/q-5)*(2/q-3) + _v*nm_z**(2/q-3), comp=0.5)
                 if adj:
@@ -73,7 +73,7 @@ class whiten:
             def grad(v, adj=False):
                 _v = v.reshape((self.prior.dim,-1),order='F')
                 if adj:
-                    return self.prior.C_act(_xi*np.sum(_xi*_v,axis=0,keepdims=True)*nm_xi**(q/2-3)*(q/2-1) + _v*nm_xi**(q/2-1), comp=-0.5).squeeze()
+                    return self.prior.C_act(_xi*np.sum(_xi*_v,axis=0,keepdims=True)*nm_xi**(q/2-3)*(q/2-1) + _v*nm_xi**(q/2-1), comp=-0.5, adjt=adj).squeeze()
                 else:
                     _v = self.prior.C_act(_v, comp=-0.5)
                     diLmdv = _xi*np.sum(_xi*_v,axis=0,keepdims=True)*nm_xi**(q/2-3)*(q/2-1) + _v*nm_xi**(q/2-1)

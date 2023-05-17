@@ -21,7 +21,7 @@ cov_opt = 'matern'
 basis_opt = 'Fourier'
 KL_trunc = 100
 space = 'fun'
-sigma2 = 100
+sigma2 = 1
 s = 1
 q = 1
 store_eig = True
@@ -58,24 +58,21 @@ else:
         fld_m = folder+'/'+pri_mdls[m]
         # preparation for estimates
         prior_params['prior_option']={'GP':'gp','BSV':'bsv','qEP':'qep'}[pri_mdls[m]]
-        prior_params['ker_opt']='serexp' if prior_params['prior_option']=='bsv' else ker_opt
+        # prior_params['ker_opt']='serexp' if prior_params['prior_option']=='bsv' else ker_opt
         prior_params['q']=2 if prior_params['prior_option']=='gp' else q
-        if prior_params['prior_option']=='gp':
-            prior_params['sigma2'] = 100
+        prior_params['sigma2'] = 10 if prior_params['prior_option']=='gp' else sigma2
         ts = Tesla(**prior_params,**lik_params,seed=seed)
         dat = ts.misfit.obs
         if os.path.exists(fld_m):
-            pckl_files=[f for f in os.listdir(fld_m) if f.endswith('.pckl')]
-            for f_i in pckl_files:
+            npz_files=[f for f in os.listdir(fld_m) if f.endswith('.npz')]
+            for f_i in npz_files:
                 try:
-                    f=open(os.path.join(fld_m,f_i),'rb')
-                    f_read=pickle.load(f)
-                    samp=f_read[-4]
+                    f_read=np.load(os.path.join(fld_m,f_i))
+                    samp=f_read['samp_u' if '_hp_' in f_i else 'samp']
                     if ts.prior.space=='vec': samp=ts.prior.vec2fun(samp.T).T
                     med_f[m]=np.median(samp,axis=0)
                     mean_f[m]=np.mean(samp,axis=0)
                     std_f[m]=np.std(samp,axis=0)
-                    f.close()
                     print(f_i+' has been read!'); break
                 except:
                     pass

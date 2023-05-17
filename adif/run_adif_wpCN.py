@@ -25,7 +25,7 @@ np.set_printoptions(precision=3, suppress=True)
 def main(seed=2022):
     parser = argparse.ArgumentParser()
     parser.add_argument('seed_NO', nargs='?', type=int, default=2022)
-    parser.add_argument('mdl_NO', nargs='?', type=int, default=2)
+    parser.add_argument('mdl_NO', nargs='?', type=int, default=1)
     parser.add_argument('q', nargs='?', type=int, default=1)
     parser.add_argument('num_samp', nargs='?', type=int, default=5000)
     parser.add_argument('num_burnin', nargs='?', type=int, default=2500)
@@ -36,14 +36,15 @@ def main(seed=2022):
     args = parser.parse_args()
     
     # set random seed
-    np.random.seed(args.seed_NO)
+    seed=args.seed_NO
+    np.random.seed(seed)
     
     ## define Advection-Diffusion inverse problem ##
 #     mesh = df.Mesh('ad_10k.xml')
     meshsz = (61,61)
     eldeg = 1
     prior_option = args.mdls[args.mdl_NO]
-    gamma = 2.; delta = 10.
+    gamma = 1.; delta = 8.
     q = args.q; L = 1000; store_eig = True
     if prior_option=='gp': q=2
     rel_noise = .5

@@ -26,36 +26,36 @@ def main(seed=2022):
     parser = argparse.ArgumentParser()
     parser.add_argument('alg_NO', nargs='?', type=int, default=0)
     parser.add_argument('seed_NO', nargs='?', type=int, default=2022)
-    parser.add_argument('mdl_NO', nargs='?', type=int, default=0)
-    parser.add_argument('ker_NO', nargs='?', type=int, default=1)
+    parser.add_argument('mdl_NO', nargs='?', type=int, default=2)
+    parser.add_argument('ker_NO', nargs='?', type=int, default=0)
     parser.add_argument('q', nargs='?', type=int, default=1)
     parser.add_argument('num_samp', nargs='?', type=int, default=10000)
     parser.add_argument('num_burnin', nargs='?', type=int, default=5000)
     parser.add_argument('mdls', nargs='?', type=str, default=('gp','bsv','qep'))
     parser.add_argument('kers', nargs='?', type=str, default=('covf','serexp'))
-    parser.add_argument('step_sizes', nargs='?', type=float, default=(1e-7,1e-5,1e-5,1e-3,1e-3))
+    parser.add_argument('step_sizes', nargs='?', type=float, default=(1e-4,1e-5,1e-5,1e-3,1e-3))
     parser.add_argument('step_nums', nargs='?', type=int, default=[1,1,5,1,5])
     parser.add_argument('algs', nargs='?', type=str, default=('wpCN','winfMALA','winfHMC','winfmMALA','winfmHMC'))
     args = parser.parse_args()
     
     # set random seed
-    np.random.seed(args.seed_NO)
-    # np.random.seed(seed)
+    # seed=args.seed_NO
+    np.random.seed(seed)
     
     ## define the linear inverse problem ##
     prior_params={'prior_option':args.mdls[args.mdl_NO],
-                  'ker_opt':'serexp' if args.mdls[args.mdl_NO]=='bsv' else args.kers[args.ker_NO],
+                  'ker_opt':args.kers[args.ker_NO],#'serexp' if args.mdls[args.mdl_NO]=='bsv' else args.kers[args.ker_NO],
                   'cov_opt':'matern',
                   'basis_opt':'Fourier', # serexp param
                   'KL_trunc':100,
                   'space':'fun',
-                  'sigma2':1,#00,# if args.mdls[args.mdl_NO]=='gp' else 1,
-                  's':1,
+                  'sigma2':10 if args.mdls[args.mdl_NO]=='gp' else 1,
+                  's':2,
                   'q':2 if args.mdls[args.mdl_NO]=='gp' else args.q,
                   'store_eig':True}
     lik_params={'start_date':'2022-01-01',
                 'end_date':'2023-01-01'}
-    ts = Tesla(**prior_params,**lik_params,seed=args.seed_NO)
+    ts = Tesla(**prior_params,**lik_params,seed=seed)
     
     # initialization random noise epsilon
     try:
@@ -83,7 +83,7 @@ def main(seed=2022):
     
     # run MCMC to generate samples
     print("Running %s sampler with step size %g for %d step(s) for %s prior model with %s kernel taking random seed %d ..." 
-          % (args.algs[args.alg_NO],args.step_sizes[args.alg_NO],args.step_nums[args.alg_NO], args.mdls[args.mdl_NO],args.kers[args.ker_NO], args.seed_NO))
+          % (args.algs[args.alg_NO],args.step_sizes[args.alg_NO],args.step_nums[args.alg_NO], args.mdls[args.mdl_NO],args.kers[args.ker_NO], seed))
     
     winfMC=wht_geoinfMC(z_init,ts,args.step_sizes[args.alg_NO],args.step_nums[args.alg_NO],args.algs[args.alg_NO],transformation=ts.whiten.wn2qep, MF_only=True, whitened=True, k=100, spdapx=True)
     res=winfMC.sample(args.num_samp,args.num_burnin,return_result=True)#, save_result=False)
@@ -133,15 +133,15 @@ def main(seed=2022):
     # f.close()
 
 if __name__ == '__main__':
-    main()
-    # n_seed = 10; i=0; n_success=0
-    # while n_success < n_seed:
-    #     seed_i=2022+i*10
-    #     try:
-    #         print("Running for seed %d ...\n"% (seed_i))
-    #         main(seed=seed_i)
-    #         n_success+=1
-    #     except Exception as e:
-    #         print(e)
-    #         pass
-    #     i+=1
+    # main()
+    n_seed = 10; i=0; n_success=0
+    while n_success < n_seed:
+        seed_i=2022+i*10
+        try:
+            print("Running for seed %d ...\n"% (seed_i))
+            main(seed=seed_i)
+            n_success+=1
+        except Exception as e:
+            print(e)
+            pass
+        i+=1

@@ -8,7 +8,7 @@ updated October 4, 2022 for project of q-exponential process prior (Q-EXP)
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2022, The STBP project and the Q-EXP project"
 __license__ = "GPL"
-__version__ = "0.7"
+__version__ = "0.8"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu lanzithinking@outlook.com"
 
@@ -265,7 +265,7 @@ class _bsv(BSV):
             u+=self.mean
         return u.squeeze()
     
-    def C_act(self,u,comp=1,proj=False):
+    def C_act(self,u,comp=1,**kwargs):
         """
         Calculate operation of C^comp on vector u: u --> C^comp * u
         """
@@ -284,7 +284,7 @@ class _bsv(BSV):
                 proj_u=eigf.T.dot(u)*eigv[:,None]**(comp)
             else:
                 raise ValueError('Wrong space!')
-            if proj or self.space=='vec':
+            if kwargs.pop('proj',False) or self.space=='vec':
                 return proj_u
             else:
                 Cu=eigf.dot(proj_u)
@@ -358,7 +358,7 @@ class _qep(qEP):
         g=A*invCu
         return g.squeeze()
     
-    def Hess(self,u,logr=False):
+    def Hess(self,u,logr=True):
         """
         Calculate the Hessian action of log-prior
         """
@@ -368,8 +368,8 @@ class _qep(qEP):
         
         invCu=self.C_act(u,comp=-1)
         r=abs(np.sum(u*invCu,axis=0,keepdims=True))
-        A=(self.ker.N*(1-self.q/2)+self.q/2*r**(self.q/2))/r
-        B=(self.q-2)*(self.ker.N+self.q/2*r**(self.q/2))/r**2
+        A=(self.ker.N*(1-self.q/2)*logr+self.q/2*r**(self.q/2))/r
+        B=(self.q-2)*(self.ker.N*logr+self.q/2*r**(self.q/2))/r**2
         def hess(v):
             if v.ndim==1 or v.shape[0]!=self.dim:
                 v=v.reshape((self.dim,-1),order='F')
@@ -378,7 +378,7 @@ class _qep(qEP):
             return Hv.squeeze()
         return hess
     
-    def invHess(self,u):
+    def invHess(self,u,logr=True):
         """
         Calculate the inverse Hessian action of log-prior
         """
@@ -388,8 +388,8 @@ class _qep(qEP):
         
         invCu=self.C_act(u,comp=-1)
         r=abs(np.sum(u*invCu,axis=0,keepdims=True))
-        A=(self.ker.N*(1-self.q/2)+self.q/2*r**(self.q/2))/r
-        B=(self.q-2)*(self.ker.N+self.q/2*r**(self.q/2))/r**2
+        A=(self.ker.N*(1-self.q/2)*logr+self.q/2*r**(self.q/2))/r
+        B=(self.q-2)*(self.ker.N*logr+self.q/2*r**(self.q/2))/r**2
         C=A+B*r
         def ihess(v):
             if v.ndim==1 or v.shape[0]!=self.dim:

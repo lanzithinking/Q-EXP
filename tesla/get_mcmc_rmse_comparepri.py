@@ -21,7 +21,7 @@ cov_opt = 'matern'
 basis_opt = 'Fourier'
 KL_trunc = 100
 space = 'fun'
-sigma2 = 100
+sigma2 = 1
 s = 1
 q = 1
 store_eig = True
@@ -54,30 +54,28 @@ if not os.path.exists(os.path.join(folder,'Tesla_'+str(ts.misfit.size)+'days_mcm
 for m in range(num_mdls):
     # preparation
     prior_params['prior_option']={'GP':'gp','BSV':'bsv','qEP':'qep'}[pri_mdls[m]]
-    prior_params['ker_opt']='serexp' if prior_params['prior_option']=='bsv' else ker_opt
+    # prior_params['ker_opt']='serexp' if prior_params['prior_option']=='bsv' else ker_opt
     prior_params['q']=2 if prior_params['prior_option']=='gp' else q
-    if prior_params['prior_option']=='gp':
-        prior_params['sigma2'] = 100
+    prior_params['sigma2'] = 10 if prior_params['prior_option']=='gp' else sigma2
     ts = Tesla(**prior_params,**lik_params,seed=seed)
     dat = ts.misfit.obs
     print('Processing '+pri_mdls[m]+' prior model...\n')
     fld_m = folder+'/'+pri_mdls[m]
     # preparation for estimates
     if os.path.exists(fld_m):
-        rmses=[]
+        rmses=[]; files_read=[]
         num_read=0
-        pckl_files=[f for f in os.listdir(fld_m) if f.endswith('.pckl')]
-        for f_i in pckl_files:
+        npz_files=[f for f in os.listdir(fld_m) if f.endswith('.npz')]
+        for f_i in npz_files:
             try:
-                f=open(os.path.join(fld_m,f_i),'rb')
-                f_read=pickle.load(f)
-                samp=f_read[-4]
+                f_read=np.load(os.path.join(fld_m,f_i))
+                samp=f_read['samp_u' if '_hp_' in f_i else 'samp']
                 if ts.prior.space=='vec': samp=ts.prior.vec2fun(samp.T).T
                 samp_mean=np.mean(samp,axis=0)
                 # compute error
                 rmses.append(np.linalg.norm(samp_mean-dat.flatten()))#/np.linalg.norm(dat.flatten()))
+                files_read.append(f_i)
                 num_read+=1
-                f.close()
                 print(f_i+' has been read!')
             except:
                 pass
@@ -88,15 +86,14 @@ for m in range(num_mdls):
             rmse_s[m] = rmses.std()
             # get the best for plotting
             if not os.path.exists(os.path.join(folder,'Tesla_'+str(ts.misfit.size)+'days_mcmc_summary.pckl')):
-                f_i=pckl_files[np.argmin(rmses)]
-                f=open(os.path.join(fld_m,f_i),'rb')
-                f_read=pickle.load(f)
-                samp=f_read[-4]
+                f_i=files_read[np.argmin(rmses)]
+                f_read=np.load(os.path.join(fld_m,f_i))
+                samp=f_read['samp_u' if '_hp_' in f_i else 'samp']
                 if ts.prior.space=='vec': samp=ts.prior.vec2fun(samp.T).T
                 med_f[m]=np.median(samp,axis=0)
                 mean_f[m]=np.mean(samp,axis=0)
                 std_f[m]=np.std(samp,axis=0)
-                f.close()
+                print(f_i+' has been selected for plotting.')
 if not os.path.exists(os.path.join(folder,'Tesla_'+str(ts.misfit.size)+'days_mcmc_summary.pckl')):
     f=open(os.path.join(folder,'Tesla_'+str(ts.misfit.size)+'days_mcmc_summary.pckl'),'wb')
     pickle.dump([dat,med_f,mean_f,std_f],f)

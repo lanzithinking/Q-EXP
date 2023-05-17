@@ -287,7 +287,7 @@ class _bsv(BSV):
             u+=self.mean
         return u.squeeze()
     
-    def C_act(self,u,comp=1,proj=False):
+    def C_act(self,u,comp=1,**kwargs):
         """
         Calculate operation of C^comp on vector u: u --> C^comp * u
         """
@@ -306,7 +306,7 @@ class _bsv(BSV):
                 proj_u=eigf.T.dot(u)*eigv[:,None]**(comp)
             else:
                 raise ValueError('Wrong space!')
-            if proj or self.space=='vec':
+            if kwargs.pop('proj',False) or self.space=='vec':
                 return proj_u
             else:
                 Cu=eigf.dot(proj_u)

@@ -12,7 +12,7 @@ https://github.com/lanzithinking/Spatiotemporal-inverse-problem
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2020, The Bayesian STIP project"
 __license__ = "GPL"
-__version__ = "0.1"
+__version__ = "0.2"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@outlook.com"
 
@@ -87,33 +87,50 @@ class _qEP(SqrtPrecisionPDE_Prior):
                 vec=None
         return vec
     
-    def cost(self, x):
+    def cost(self, u):
         """
         negative log-prior
         """
-        Rdx = dl.Vector()
-        self.init_vector(Rdx,0)
-        dx = x[PARAMETER] - self.mean
-        self.applyR(dx, Rdx)
-        r = abs(Rdx.inner(dx))
+        Rdu = dl.Vector()
+        self.init_vector(Rdu,0)
+        du = u - self.mean
+        self.applyR(du, Rdu)
+        r = abs(Rdu.inner(du))
         reg = .5*r**(self.q/2) - self.dim/2*(self.q/2-1)*np.log(r)
         return reg
     
-    def grad(self, x, out):
+    def grad(self, u, out):
         """
         gradient of negative log-prior
         """
         out.zero()
-        dx = x[PARAMETER] - self.mean
-        self.applyR(dx, out)
-        r = abs(out.inner(dx))
-        out *= (self.dim/2*(1-self.q/2)/r+self.q/4*r**(self.q/2-1))*2
+        du = u - self.mean
+        self.applyR(du, out)
+        r = abs(out.inner(du))
+        A = self.dim*(1-self.q/2)/r+self.q/2*r**(self.q/2-1)
+        out *= A
     
     def applyR(self, dm, out):
         """
         apply C^{-1}: out = C{-1} dm
         """
         self.R.mult(dm,out)
+    
+    def hess(self, u, v, out):
+        """
+        Hessian of negative log-prior
+        """
+        out.zero()
+        Rdu=out.copy()
+        du = u - self.mean
+        self.applyR(du, Rdu)
+        r = abs(Rdu.inner(du))
+        A = self.dim*(1-self.q/2)/r+self.q/2*r**(self.q/2-1)
+        B = (self.q-2)*(self.dim/r**2+self.q/2*r**(self.q/2-2))
+        self.applyR(v, out)
+        c = B*du.inner(out)
+        out *= A
+        out.axpy(c,Rdu)
     
     def sample(self, whiten=False, add_mean=False):
         """
@@ -155,7 +172,7 @@ class _qEP(SqrtPrecisionPDE_Prior):
         r=abs(Pu_m.inner(u_m))
         logpri=-0.5*r**(self.q/2)+self.dim/2*(self.q/2-1)*np.log(r)
         if grad:
-            gradpri=-Pu_m*(self.dim/2*(1-self.q/2)/r+self.q/4*r**(self.q/2-1))*2
+            gradpri=-Pu_m*(self.dim*(1-self.q/2)/r+self.q/2*r**(self.q/2-1))
             return logpri,gradpri
         else:
             return logpri
@@ -223,11 +240,31 @@ if __name__=='__main__':
     Vh = pde.Vh[STATE]
     # define prior
     gamma = 2.; delta = 10.
-    prior = _qEP(Vh, gamma=gamma, delta=delta)
+    prior = _qEP(Vh, gamma=gamma, delta=delta, q=1)
+    
+    # test gradient and Hessian
+    u=prior.sample()
+    logpri,gradpri=prior.logpdf(u, add_mean=True, grad=True)
+    # logpri=prior.cost(u)
+    # gradpri=prior.gen_vector(); prior.grad(u, gradpri)
+    v=prior.sample()
+    hessv=prior.gen_vector()
+    prior.hess(u, v, hessv)
+    h=1e-5
+    logpri1,gradpri1=prior.logpdf(u+h*v, add_mean=True, grad=True)
+    # logpri1=prior.cost(u+h*v)
+    # gradpri1=prior.gen_vector(); prior.grad(u+h*v, gradpri1)
+    gradv_fd=(logpri1-logpri)/h
+    gradv=gradpri.inner(v)
+    rdiff_gradv=np.abs(gradv_fd-gradv)/v.norm('l2')
+    print('Relative difference of gradients in a random direction between direct calculation and finite difference: %.10f' % rdiff_gradv)
+    hessv_fd=(gradpri1-gradpri)/h
+    rdiff_hessv=(hessv_fd+hessv).norm('l2')/v.norm('l2')
+    print('Relative difference of Hessian-action in a random direction between direct calculation and finite difference: %.10f' % rdiff_hessv)
     
     # tests
     whiten=False
-    u=prior.sample(whiten=whiten)
+    # u=prior.sample(whiten=whiten)
     logpri,gradpri=prior.logpdf(u, whiten=whiten, grad=True)
     print('The logarithm of prior density at u is %0.4f, and the L2 norm of its gradient is %0.4f' %(logpri,gradpri.norm('l2')))
     fig=dl.plot(vector2Function(u,prior.Vh))

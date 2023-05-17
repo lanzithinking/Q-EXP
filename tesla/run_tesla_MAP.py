@@ -106,9 +106,9 @@ def main(seed=2022):
     savepath=os.path.join(os.getcwd(),'MAP')
     if not os.path.exists(savepath): os.makedirs(savepath)
     # save
-    filename='Tesla_'+str(ts.misfit.size)+'days_MAP_dim'+str(len(MAP))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
+    filename='Tesla_'+str(ts.misfit.size)+'days_MAP_dim'+str(len(map_f))+'_'+prior_params['prior_option']+'_'+prior_params['ker_opt']+'_'+ctime+'.pckl'
     f=open(os.path.join(savepath,filename),'wb')
-    pickle.dump([dat, MAP.reshape(ts.misfit.size), funs, errs],f)
+    pickle.dump([dat, map_f.reshape(ts.misfit.size), funs, errs],f)
     f.close()
 
 if __name__ == '__main__':

@@ -21,7 +21,7 @@ https://github.com/lanzithinking/Spatiotemporal-inverse-problem
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2020, The Bayesian STIP project"
 __license__ = "GPL"
-__version__ = "0.2"
+__version__ = "0.3"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@outlook.com"
 
@@ -184,7 +184,7 @@ class advdiff(TimeDependentAD,SpaceTimePointwiseStateObservation):
         
         return grad_norm
     
-    def setPointForHessianEvaluations(self, x, gauss_newton_approx=False):
+    def setPointForHessianEvaluations(self, x, gauss_newton_approx=False, misfit_only=False):
         """
         Specify the point x = [u,a,p] at which the Hessian operator (or the Gauss-Newton approximation)
         need to be evaluated.
@@ -192,7 +192,23 @@ class advdiff(TimeDependentAD,SpaceTimePointwiseStateObservation):
         Nothing to do since the problem is linear
         """
         self.gauss_newton_approx = gauss_newton_approx
-        return
+        model = self
+        model.M = self.pde.M
+        model.M_stab = self.pde.M_stab
+        model.Mt_stab = self.pde.Mt_stab
+        model.solver = self.pde.solver
+        model.solvert = self.pde.solvert
+        model.soln_count = self.pde.soln_count
+        model.B = self.misfit.B
+        model.u_snapshot = self.misfit.u_snapshot
+        model.Bu_snapshot = self.misfit.Bu_snapshot
+        model.noise_variance = self.misfit.noise_variance
+        model.STlik = self.misfit.STlik
+        if model.STlik: model.stgp = self.misfit.stgp
+        if not misfit_only:
+            model.R = self.prior.R
+            model.applyR = lambda v,out: self.prior.hess(x[PARAMETER],v,out) # for the convenience of defining ReducedHessian
+        return model
     
     def exportState(self, x, filename, varname):
         """
@@ -241,22 +257,8 @@ class advdiff(TimeDependentAD,SpaceTimePointwiseStateObservation):
             parameter=self.prior.mean
         self.x[PARAMETER] = parameter
         # set point for Hessian evaluation
-        self.setPointForHessianEvaluations(self.x)
-        self_ = self
-        self_.M = self.pde.M
-        self_.M_stab = self.pde.M_stab
-        self_.Mt_stab = self.pde.Mt_stab
-        self_.solver = self.pde.solver
-        self_.solvert = self.pde.solvert
-        self_.soln_count = self.pde.soln_count
-        self_.B = self.misfit.B
-        self_.u_snapshot = self.misfit.u_snapshot
-        self_.Bu_snapshot = self.misfit.Bu_snapshot
-        self_.noise_variance = self.misfit.noise_variance
-        if not MF_only:
-            self_.R = self.prior.R
-            self_.applyR = self.prior.applyR
-        HessApply = ReducedHessian(self_, misfit_only=MF_only)
+        model = self.setPointForHessianEvaluations(self.x, misfit_only=MF_only)
+        HessApply = ReducedHessian(model, misfit_only=MF_only)
         return HessApply
     
     def get_geom(self,parameter=None,geom_ord=[0],whitened=False,log_level=dl.LogLevel.ERROR,**kwargs):
@@ -269,33 +271,34 @@ class advdiff(TimeDependentAD,SpaceTimePointwiseStateObservation):
         loglik=None; agrad=None; HessApply=None; eigs=None;
         # set log level: DBG(10), TRACE(13), PROGRESS(16), INFO(20,default), WARNING(30), ERROR(40), or CRITICAL(50)
         dl.set_log_level(log_level)
+        MF_only=kwargs.pop('MF_only',True)
         
         # un-whiten if necessary
-        if whitened:
-            parameter=self.whtprior.v2u(parameter)
+        param=self.whtprior.v2u(parameter) if whitened else parameter
         
         # get log-likelihood
         if any(s>=0 for s in geom_ord):
-            loglik = -self._get_misfit(parameter)
+            loglik = -self._get_misfit(param)
+            if whitened: loglik += self.whtprior.jacdet(parameter)
         
         # get gradient
         if any(s>=1 for s in geom_ord):
-            agrad = -self._get_grad(parameter)
+            agrad = -self._get_grad(param)
             if whitened:
                 agrad_ = agrad.copy(); agrad.zero()
-                self.whtprior.C_act(agrad_,agrad,comp=0.5,transp=True)
+                agrad.axpy(1,self.whtprior.v2u(parameter,1)(agrad_,adj=True)+self.whtprior.jacdet(parameter, 1))
         
         # get Hessian Apply
         if any(s>=1.5 for s in geom_ord):
-            HessApply = self._get_HessApply(parameter,kwargs.pop('MF_only',True)) # Hmisfit if MF is true
+            HessApply = self._get_HessApply(param,MF_only=MF_only) # Hmisfit if MF is true
             if whitened:
-                HessApply = wht_Hessian(self.whtprior,HessApply)
+                HessApply = wht_Hessian(parameter,self.whtprior,HessApply,post_grad=lambda u:self._get_grad(u,MF_only=MF_only))
             if np.max(geom_ord)<=1.5:
                 # adjust the gradient
                 Hu = self.generate_vector(PARAMETER)
                 HessApply.mult(parameter,Hu)
                 agrad.axpy(1.,Hu)
-                if not kwargs.pop('MF_only',True):
+                if not MF_only:
                     Ru = self.generate_vector(PARAMETER)
 #                     self.prior.R.mult(parameter,Ru)
                     self.prior.grad(parameter,Ru)
@@ -318,12 +321,20 @@ class advdiff(TimeDependentAD,SpaceTimePointwiseStateObservation):
             if any(s>1.5 for s in geom_ord):
                 # adjust the gradient using low-rank approximation
                 self.post_Ga = GaussianLRPosterior(getattr(self,{True:'wht',False:''}[whitened]+'prior'), eigs[0], eigs[1])
-                Hu = self.generate_vector(PARAMETER)
-                self.post_Ga.Hlr.mult(parameter,Hu) # post_Ga.Hlr=posterior precision
+                def postC_act(obj,x):
+                    out=dl.Vector()
+                    obj.Hlr.init_vector(out,0)
+                    obj.Hlr.mult(x,out)
+                    return out
+                self.post_Ga.postC_act=lambda x: postC_act(self.post_Ga, x)
+                # Hu = self.generate_vector(PARAMETER)
+                # self.post_Ga.Hlr.mult(parameter,Hu) # post_Ga.Hlr=posterior precision
+                Hu = self.post_Ga.postC_act(parameter)
                 agrad.axpy(1.,Hu)
-                Ru = self.generate_vector(PARAMETER)
-                getattr(self,{True:'wht',False:''}[whitened]+'prior').grad(parameter,Ru)
-                agrad.axpy(-1.,Ru)
+                if not MF_only:
+                    Ru = self.generate_vector(PARAMETER)
+                    getattr(self,{True:'wht',False:''}[whitened]+'prior').grad(parameter,Ru)
+                    agrad.axpy(-1.,Ru)
         
         return loglik,agrad,HessApply,eigs
     
@@ -335,18 +346,17 @@ class advdiff(TimeDependentAD,SpaceTimePointwiseStateObservation):
             parameter=self.prior.mean
         
         # un-whiten if necessary
-        if whitened:
-            parameter=self.whtprior.v2u(parameter)
+        param=self.whtprior.v2u(parameter) if whitened else parameter
         
         # solve the forward problem
-        self.x[PARAMETER] = parameter
+        self.x[PARAMETER] = param
         self.pde.solveFwd(self.x[STATE], self.x)
         # solve the adjoint problem
         self.pde.solveAdj(self.x[ADJOINT], self.x, self.misfit)
         # get Hessian Apply
-        HessApply = self._get_HessApply(parameter,kwargs.pop('MF_only',True)) # Hmisfit if MF is true
+        HessApply = self._get_HessApply(param,kwargs.pop('MF_only',True)) # Hmisfit if MF is true
         if whitened:
-            HessApply = wht_Hessian(self.whtprior,HessApply)
+            HessApply = wht_Hessian(parameter,self.whtprior,HessApply)
         # get estimated eigen-decomposition for the Hessian (or Gauss-Newton)
         k=kwargs['k'] if 'k' in kwargs else kwargs['incr_k'] if 'incr_k' in kwargs  else 80
         p=kwargs['p'] if 'p' in kwargs else 20
@@ -354,7 +364,7 @@ class advdiff(TimeDependentAD,SpaceTimePointwiseStateObservation):
             kwargs['k']=k
 #         if self.rank == 0:
 #             print('Double Pass Algorithm. Requested eigenvectors: {0}; Oversampling {1}.'.format(k,p))
-        Omega = MultiVector(parameter, k+p)
+        Omega = MultiVector(param, k+p)
         parRandom.normal(1., Omega)
         if whitened:
             eigs = singlePassGx(HessApply, self.prior.M, self.prior.Msolver, Omega, **kwargs)
@@ -573,13 +583,14 @@ if __name__ == '__main__':
 #     mesh = dl.Mesh('ad_10k.xml')
     meshsz = (61,61)
     eldeg = 1
-    prior_option='qep'
+    prior_option='gp'
     gamma = 1.; delta = 8.
     L = 1000; store_eig = True
+    q = {'gp':2,'bsv':1.8,'qep':1}[prior_option]
     # observation_times = np.arange(1., 4.+.5*.1, .1)
     rel_noise = .5
     nref = 1
-    adif = advdiff(mesh=meshsz, eldeg=eldeg, prior_option=prior_option, gamma=gamma, delta=delta, L=L, store_eig=store_eig, rel_noise=rel_noise, nref=nref, seed=seed, STlik=True)
+    adif = advdiff(mesh=meshsz, eldeg=eldeg, prior_option=prior_option, gamma=gamma, delta=delta, L=L, store_eig=store_eig, rel_noise=rel_noise, nref=nref, seed=seed, STlik=True, q=q)
     # test
     adif.test(1e-8)
     # obtain MAP

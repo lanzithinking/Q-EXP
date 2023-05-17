@@ -93,7 +93,7 @@ for i,ax in enumerate(axes.flat):
     img=truth if i==0 else msft.obs.reshape((phi.size,s.size),order='F').T if i==1 else maps[i-2]
     img=img[88:400,88:400] if i!=1 else img[88:400,:]
     plt.imshow(img,extent=[0, 1, 0, 1])
-    if i==1: ax.set_xticklabels(['$\pi$','$-4\pi/5$','$-3\pi/5$','$-2\pi/5$','$-\pi/5$','$0$'])
+    if i==1: ax.set_xticklabels(['$-\pi$','$-4\pi/5$','$-3\pi/5$','$-2\pi/5$','$-\pi/5$','$0$'])
     ax.set_title(titles[i],fontsize=16)
     ax.set_aspect('auto')
 plt.subplots_adjust(wspace=0.1, hspace=0.2)

@@ -55,15 +55,20 @@ if __name__=='__main__':
     
     # test gradient with finite difference
     u=prior.sample()
-    l,g=prior.logpdf(u,grad=True)
+    l,g=prior.logpdf(u,add_mean=True,grad=True)
     h=1e-6
     v=prior.sample()
+    Hv=prior.gen_vector()
+    prior.hess(u, v, Hv)
     u.axpy(h,v)
-    l1=prior.logpdf(u,grad=False)
+    l1,g1=prior.logpdf(u,add_mean=True,grad=True)
     dlv_fd = (l1-l)/h
     dlv = g.inner(v)
     rdiff_gradv = np.abs(dlv_fd-dlv)/v.norm('l2')
     print('Relative difference of gradients in a random direction between direct calculation and finite difference: %.10f' % rdiff_gradv)
+    Hv_fd=(g1-g)/h
+    rdiff_hessv=(Hv_fd+Hv).norm('l2')/v.norm('l2')
+    print('Relative difference of Hessian-action in a random direction between direct calculation and finite difference: %.10f' % rdiff_hessv)
     
     # check conversions
     whiten=False

@@ -87,30 +87,37 @@ class _GP(SqrtPrecisionPDE_Prior):
                 vec=None
         return vec
     
-    def cost(self, x):
+    def cost(self, u):
         """
         negative log-prior
         """
-        Rdx = dl.Vector()
-        self.init_vector(Rdx,0)
-        dx = x[PARAMETER] - self.mean
-        self.applyR(dx, Rdx)
-        reg = .5*Rdx.inner(dx)
+        Rdu = dl.Vector()
+        self.init_vector(Rdu,0)
+        du = u - self.mean
+        self.applyR(du, Rdu)
+        reg = .5*Rdu.inner(du)
         return reg
     
-    def grad(self, x, out):
+    def grad(self, u, out):
         """
         gradient of negative log-prior
         """
         out.zero()
-        dx = x[PARAMETER] - self.mean
-        self.applyR(dx, out)
+        du = u - self.mean
+        self.applyR(du, out)
     
     def applyR(self, dm, out):
         """
         apply C^{-1}: out = C{-1} dm
         """
         self.R.mult(dm,out)
+    
+    def hess(self, u, v, out):
+        """
+        Hessian of negative log-prior
+        """
+        out.zero()
+        self.applyR(v, out)
     
     def sample(self, whiten=False, add_mean=False):
         """
@@ -218,9 +225,25 @@ if __name__=='__main__':
     gamma = 2.; delta = 10.
     prior = _GP(Vh, gamma=gamma, delta=delta)
     
+    # test gradient and Hessian
+    u=prior.sample()
+    logpri,gradpri=prior.logpdf(u, add_mean=True, grad=True)
+    v=prior.sample()
+    hessv=prior.gen_vector()
+    prior.hess(u, v, hessv)
+    h=1e-5
+    logpri1,gradpri1=prior.logpdf(u+h*v, add_mean=True, grad=True)
+    gradv_fd=(logpri1-logpri)/h
+    gradv=gradpri.inner(v)
+    rdiff_gradv=np.abs(gradv_fd-gradv)/v.norm('l2')
+    print('Relative difference of gradients in a random direction between direct calculation and finite difference: %.10f' % rdiff_gradv)
+    hessv_fd=(gradpri1-gradpri)/h
+    rdiff_hessv=(hessv_fd+hessv).norm('l2')/v.norm('l2')
+    print('Relative difference of Hessian-action in a random direction between direct calculation and finite difference: %.10f' % rdiff_hessv)
+    
     # tests
     whiten=False
-    u=prior.sample(whiten=whiten)
+    # u=prior.sample(whiten=whiten)
     logpri,gradpri=prior.logpdf(u, whiten=whiten, grad=True)
     print('The logarithm of prior density at u is %0.4f, and the L2 norm of its gradient is %0.4f' %(logpri,gradpri.norm('l2')))
     fig=dl.plot(vector2Function(u,prior.Vh))

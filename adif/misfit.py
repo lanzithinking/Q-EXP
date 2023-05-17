@@ -249,7 +249,7 @@ class SpaceTimePointwiseStateObservation(Misfit):
     def apply_ij(self, i,j, direction, out):
         out.zero()
         if i == STATE and j == STATE:
-            if self.misfit.STlik:
+            if self.STlik:
                 du = []
                 for t in self.observation_times:
                     direction.retrieve(self.u_snapshot, t)
@@ -257,7 +257,7 @@ class SpaceTimePointwiseStateObservation(Misfit):
                     # self.Bu_snapshot *= 1./self.noise_variance
                     du.append(self.Bu_snapshot.get_local())
                 du = np.stack(du).T
-                g = self.misfit.stgp.solve(du).reshape(du.shape,order='F')
+                g = self.stgp.solve(du).reshape(du.shape,order='F')
                 for j,t in enumerate(self.observation_times):
                     self.Bu_snapshot.set_local(g[:,j])
                     self.B.transpmult(self.Bu_snapshot, self.u_snapshot) 
@@ -285,6 +285,13 @@ class SpaceTimePointwiseStateObservation(Misfit):
     def applyWmm(self, dm, out):
         out.zero()
     
+    def Hess(self, v, out):
+        """
+        Compute the Hessian action of misfit
+        """
+        out.zero()
+        self.applyWuu(v, out)
+    
     def plot_data(self, times, figsz=(12,5)):
         """
         Plot the observations with its values u(x, t) at fixed locations for given time points
@@ -306,7 +313,7 @@ class SpaceTimePointwiseStateObservation(Misfit):
     
 if __name__ == '__main__':
     np.random.seed(2020)
-    from prior import *
+    from prior import _prior
 #     # define pde
     meshsz = (61,61)
     eldeg = 1
@@ -327,7 +334,7 @@ if __name__ == '__main__':
     # define misfit
     rel_noise = .5
     nref = 1
-    misfit = SpaceTimePointwiseStateObservation(Vh, observation_times, targets, rel_noise=rel_noise, nref=nref)
+    misfit = SpaceTimePointwiseStateObservation(Vh, observation_times, targets, rel_noise=rel_noise, nref=nref, STlik=True)
 #     # optional: refine mesh to obtain (new) observations
 #     rf_mesh = dl.refine(pde.mesh)
 #     rf_pde = TimeDependentAD(mesh=rf_mesh)
@@ -339,10 +346,10 @@ if __name__ == '__main__':
     plt_times=[1.,2.,3.,4.]
     fig = misfit.plot_data(plt_times, (9,8))
     plt.subplots_adjust(wspace=-0.1, hspace=0.2)
-    plt.savefig(os.path.join(os.getcwd(),'properties/obs.png'),bbox_inches='tight')
+    # plt.savefig(os.path.join(os.getcwd(),'properties/obs.png'),bbox_inches='tight')
     
     # test gradient
-    prior = BiLaplacian(Vh=pde.Vh[PARAMETER], gamma=1., delta=8.)
+    prior = _prior(Vh=pde.Vh[PARAMETER], gamma=1., delta=8.)
     u = prior.sample()
     x = [pde.generate_vector(STATE), u, None]
     pde.solveFwd(x[STATE], x)
@@ -352,10 +359,21 @@ if __name__ == '__main__':
     v = prior.sample()
     dx = [pde.generate_vector(STATE), v, None]
     pde.solveFwd(dx[STATE], dx)
-    h = 1e-8
+    h = 1e-7
     x[STATE].axpy(h,dx[STATE])
     c1 = misfit.cost(x)
     gdx_fd = (c1-c)/h
     gdx = g.inner(dx[STATE])
     rdiff_gdx = abs(gdx_fd-gdx)/dx[STATE].norm("linf", 'l2')
     print('Relative difference of gradients in a random direction between exact calculation and finite difference: %.10f' % rdiff_gdx)
+    g1 = pde.generate_vector(STATE)
+    misfit.grad(STATE, x, g1)
+    Hdx_fd = pde.generate_vector(STATE)
+    Hdx_fd.axpy(1.0/h,g1)
+    Hdx_fd.axpy(-1.0/h,g)
+    Hdx = pde.generate_vector(STATE)
+    misfit.Hess(dx[STATE], Hdx)
+    rdiff_Hdx = Hdx_fd.copy()
+    rdiff_Hdx.axpy(-1.0,Hdx)
+    rdiff_Hdx = rdiff_Hdx.norm("linf", 'l2')/dx[STATE].norm("linf", 'l2')
+    print('Relative difference of Hessian-action in a random direction between exact calculation and finite difference: %.10f' % rdiff_Hdx)

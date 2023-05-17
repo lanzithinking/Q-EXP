@@ -143,12 +143,12 @@ plt.rcParams['image.cmap'] = 'jet'
 #     # fig.tight_layout()
 #     if not os.path.exists(folder+'/predictions'): os.makedirs(folder+'/predictions')
 #     plt.savefig(folder+'/predictions/comparepri_k'+str(k)+'.png',bbox_inches='tight')
-    # plt.show()
+#     # plt.show()
 
 # fig,axes = plt.subplots(nrows=num_rows,ncols=2,sharex=False,sharey=False,figsize=(9,8))
 num_rows=1
-fig,axes = plt.subplots(nrows=num_rows,ncols=2,sharex=False,sharey=False,figsize=(14,6))
-locs=[25,30]
+fig,axes = plt.subplots(nrows=num_rows,ncols=3,sharex=False,sharey=False,figsize=(20,5))
+locs=[14,25,30]
 lg=[]
 for i,ax in enumerate(axes.flat):
     plt.axes(axes.flat[i])
@@ -181,7 +181,7 @@ for i,ax in enumerate(axes.flat):
     plt.legend(lg, ['Truth']+[mdl_names[i] for i in [0,2]],frameon=False, fontsize=16)
     ax.set_aspect('auto')
     # plt.axis([0, 1, 0, 1])
-plt.subplots_adjust(wspace=0.15, hspace=0.1)
+plt.subplots_adjust(wspace=0.2, hspace=0.1)
 # save plot
 # fig.tight_layout()
 # if not os.path.exists(folder+'/predictions'): os.makedirs(folder+'/predictions')

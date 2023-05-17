@@ -12,7 +12,7 @@ https://github.com/lanzithinking/Spatiotemporal-inverse-problem
 __author__ = "Shiwei Lan"
 __copyright__ = "Copyright 2020, The Bayesian STIP project"
 __license__ = "GPL"
-__version__ = "0.2"
+__version__ = "0.3"
 __maintainer__ = "Shiwei Lan"
 __email__ = "slan@asu.edu; lanzithinking@outlook.com"
 
@@ -70,7 +70,7 @@ class _Besov(SqrtPrecisionPDE_Prior,Ker):
         SqrtPrecisionPDE_Prior.__init__(self,self.Vh, sqrt_precision_varf_handler, mean)
         # if self.rank == 0:
         #     print( "Prior regularization: (delta - gamma*Laplacian)^order: delta={0}, gamma={1}, order={2}".format(self.delta, self.gamma,2) )
-        self.q=kwargs.pop('q',1)
+        self.q=kwargs.get('q',1)
         self.L=kwargs.pop('L',100)
         self.store_eig=kwargs.pop('store_eig',False)
         Ker.__init__(self,x=self.Vh.tabulate_dof_coordinates(),L=self.L,store_eig=self.store_eig,sigma2=1./self.delta,l=self.gamma/self.delta,**kwargs)
@@ -159,33 +159,43 @@ class _Besov(SqrtPrecisionPDE_Prior,Ker):
                 eigf=eigf_
         return eigv,eigf
     
-    def cost(self, x):
+    def cost(self, u):
         """
         negative log-prior
         """
-        dx = x[PARAMETER] - self.mean
+        du = u - self.mean
         eigv,eigf=self._eigs()
-        proj=eigf.dot(dx)*eigv**(1/self.q)
-        reg = .5*np.sum(abs(proj)**self.q)
+        proj=eigf.dot(du)
+        reg = .5*np.sum(abs(proj)**self.q/eigv)
         return reg
     
-    def grad(self, x, out):
+    def grad(self, u, out):
         """
         gradient of negative log-prior
         """
         out.zero()
-        dx = x[PARAMETER] - self.mean
+        du = u - self.mean
         eigv,eigf=self._eigs()
-        proj=eigf.dot(dx)*eigv**(1/self.q)
-        eigf.reduce(out, 0.5*self.q*abs(proj)**(self.q-1) *np.sign(proj)*eigv**(1/self.q))
+        proj=eigf.dot(du)
+        eigf.reduce(out, 0.5*self.q*abs(proj)**(self.q-1) *np.sign(proj)/eigv)
     
     def applyR(self, dm, out):
         """
         apply C^{-1}: out = C{-1} dm
         """
         eigv,eigf=self._eigs()
-        proj=eigf.dot(dm)*eigv
-        eigf.reduce(out,proj)
+        proj=eigf.dot(dm)
+        eigf.reduce(out,proj/eigv)
+    
+    def hess(self, u, v, out):
+        """
+        Hessian of negative log-prior
+        """
+        out.zero()
+        du = u - self.mean
+        eigv,eigf=self._eigs()
+        proj=eigf.dot(du)
+        eigf.reduce(out, 0.5*self.q*(self.q-1)* (abs(proj)**(self.q-2)/eigv)*eigf.dot(v))
     
     def sample(self, whiten=False, add_mean=False):
         """
@@ -195,7 +205,7 @@ class _Besov(SqrtPrecisionPDE_Prior,Ker):
         eigv,eigf=self._eigs()
         u_vec = dl.Vector()
         self.init_vector(u_vec, 0)
-        eigf.reduce(u_vec, eigv**(-1/self.q*(not whiten))*epd_rv)
+        eigf.reduce(u_vec, eigv**(1/self.q*(not whiten))*epd_rv)
         
         if add_mean:
             u_vec.axpy(1., self.mean)
@@ -210,13 +220,13 @@ class _Besov(SqrtPrecisionPDE_Prior,Ker):
             u_m.axpy(-1.,self.u2v(self.mean) if whiten else self.mean)
         
         eigv,eigf=self._eigs()
-        proj=eigf.dot(u_m)*eigv**(1/self.q*(not whiten))
+        proj=eigf.dot(u_m)
         
-        logpri=-0.5*np.sum(abs(proj)**self.q) #+np.sum(np.log(abs(eigv)))/self.q
+        logpri=-0.5*np.sum(abs(proj)**self.q/eigv**(not whiten)) #+np.sum(np.log(abs(eigv)))/self.q
         if grad:
             gradpri=dl.Vector()
             self.init_vector(gradpri,0)
-            eigf.reduce(gradpri, -0.5*self.q*abs(proj)**(self.q-1) *np.sign(proj)*eigv**(1/self.q*(not whiten)))
+            eigf.reduce(gradpri, -0.5*self.q*abs(proj)**(self.q-1) *np.sign(proj)/eigv**(not whiten))
             return logpri,gradpri
         else:
             return logpri
@@ -236,7 +246,7 @@ class _Besov(SqrtPrecisionPDE_Prior,Ker):
                 self.applyR(u_actedon, Cu)
             else:
                 eigv,eigf=self._eigs()
-                proj=eigf.dot(u_actedon)*eigv**(-comp)
+                proj=eigf.dot(u_actedon)*eigv**(comp)
                 eigf.reduce(Cu, proj)
         return Cu
     
@@ -273,11 +283,27 @@ if __name__=='__main__':
     Vh = pde.Vh[STATE]
     # define prior
     gamma = 2.; delta = 10.
-    prior = _Besov(Vh, gamma=gamma, delta=delta)
+    prior = _Besov(Vh, gamma=gamma, delta=delta, q=1.1)
+    
+    # test gradient and Hessian
+    u=prior.sample()
+    logpri,gradpri=prior.logpdf(u, add_mean=True, grad=True)
+    v=prior.sample()
+    hessv=prior.gen_vector()
+    prior.hess(u, v, hessv)
+    h=1e-3
+    logpri1,gradpri1=prior.logpdf(u+h*v, add_mean=True, grad=True)
+    gradv_fd=(logpri1-logpri)/h
+    gradv=gradpri.inner(v)
+    rdiff_gradv=np.abs(gradv_fd-gradv)/v.norm('l2')
+    print('Relative difference of gradients in a random direction between direct calculation and finite difference: %.10f' % rdiff_gradv)
+    hessv_fd=(gradpri1-gradpri)/h
+    rdiff_hessv=(hessv_fd+hessv).norm('l2')/v.norm('l2')
+    print('Relative difference of Hessian-action in a random direction between direct calculation and finite difference: %.10f' % rdiff_hessv)
     
     # tests
     whiten=False
-    u=prior.sample(whiten=whiten)
+    # u=prior.sample(whiten=whiten)
     logpri,gradpri=prior.logpdf(u, whiten=whiten, grad=True)
     print('The logarithm of prior density at u is %0.4f, and the L2 norm of its gradient is %0.4f' %(logpri,gradpri.norm('l2')))
     fig=dl.plot(vector2Function(u,prior.Vh))
